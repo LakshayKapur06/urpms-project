@@ -3,6 +3,13 @@ const router = express.Router();
 const db = require("../config/db");
 
 // Create application
+router.get("/", (req, res) => {
+  db.query("SELECT * FROM application", (err, results) => {
+    if (err) return res.status(500).json(err);
+    res.json(results);
+  });
+});
+
 router.post("/", (req, res) => {
   const { candidate_id, job_id } = req.body;
 

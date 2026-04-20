@@ -2,6 +2,13 @@ const express = require("express");
 const router = express.Router();
 const db = require("../config/db");
 
+router.get("/payments", (req, res) => {
+  db.query("SELECT * FROM payment_record", (err, results) => {
+    if (err) return res.status(500).json(err);
+    res.json(results);
+  });
+});
+
 // Update payment status
 router.put("/payment/:payroll_id", (req, res) => {
   const payroll_id = req.params.payroll_id;
