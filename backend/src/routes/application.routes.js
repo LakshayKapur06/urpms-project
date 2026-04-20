@@ -89,3 +89,22 @@ router.put("/:id/status", (req, res) => {
     });
   });
 });
+
+// Hire candidate (calls stored procedure)
+router.post("/:id/hire", (req, res) => {
+  const application_id = req.params.id;
+  const { base_salary, bonus } = req.body;
+
+  const query = "CALL hire_candidate(?, ?, ?)";
+
+  db.query(query, [application_id, base_salary, bonus], (err) => {
+    if (err) {
+      console.error(err);
+      return res.status(400).json({ error: err.sqlMessage });
+    }
+
+    res.json({
+      message: "Candidate hired successfully"
+    });
+  });
+});

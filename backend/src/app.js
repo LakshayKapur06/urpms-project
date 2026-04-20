@@ -15,6 +15,9 @@ app.get("/", (req, res) => {
   res.send("URPMS Backend Running");
 });
 
+const payrollRoutes = require("./routes/payroll.routes");
+app.use("/payroll", payrollRoutes);
+
 app.listen(3000, () => {
   console.log("Server running on port 3000");
 });
