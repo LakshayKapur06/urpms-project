@@ -1,15 +1,27 @@
 import { useState } from "react";
 import Sidebar from "./components/Sidebar";
+import Topbar from "./components/Topbar";
 import Dashboard from "./pages/Dashboard";
 import Candidates from "./pages/Candidates";
 import Applications from "./pages/Applications";
+import Login from "./pages/Login";
 
-const [token, setToken] = useState(localStorage.getItem("token"));
-
-if (!token) return <Login setToken={setToken} />;
+const pageTitles = {
+  dashboard: "Dashboard",
+  candidates: "Candidates",
+  applications: "Applications",
+};
 
 export default function App() {
+  const [token, setToken] = useState(() => localStorage.getItem("token"));
   const [page, setPage] = useState("dashboard");
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    setToken(null);
+  };
+
+  if (!token) return <Login setToken={setToken} />;
 
   const renderPage = () => {
     switch (page) {
@@ -23,10 +35,11 @@ export default function App() {
   };
 
   return (
-    <div className="flex">
+    <div className="flex min-h-screen bg-transparent">
       <Sidebar setPage={setPage} />
 
-      <div className="flex-1 p-6 bg-gray-100 min-h-screen">
+      <div className="flex-1 p-6 transition-colors duration-300">
+        <Topbar title={pageTitles[page] || "Dashboard"} onLogout={handleLogout} />
         {renderPage()}
       </div>
     </div>

@@ -8,14 +8,16 @@ export default function Sidebar({ setPage }) {
   ];
 
   return (
-    <div className="w-64 bg-white border-r border-gray-200 min-h-screen p-5 shadow-sm">
-      <h1 className="text-2xl font-bold mb-8">URPMS</h1>
+    <div className="min-h-screen w-64 border-r border-slate-200/70 bg-white/70 p-5 shadow-sm backdrop-blur-md transition-colors duration-300 dark:border-slate-700 dark:bg-slate-950/70">
+      <h1 className="mb-8 text-2xl font-bold text-slate-900 dark:text-slate-100">
+        URPMS
+      </h1>
 
-      {menu.map(item => (
+      {menu.map((item) => (
         <div
           key={item.key}
           onClick={() => setPage(item.key)}
-          className="flex items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-gray-100 transition"
+          className="mb-2 flex cursor-pointer items-center gap-3 rounded-xl p-3 text-slate-700 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100"
         >
           {item.icon}
           {item.label}

@@ -5,8 +5,7 @@ export default function Payroll() {
   const [payments, setPayments] = useState([]);
 
   useEffect(() => {
-    API.get("/payments") // you may need to add this API
-      .then(res => setPayments(res.data));
+    API.get("/payroll/payments").then((res) => setPayments(res.data));
   }, []);
 
   const completePayment = (id) => {

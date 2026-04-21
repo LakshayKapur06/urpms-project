@@ -14,7 +14,6 @@ import {
 } from "recharts";
 import KPICard from "../components/KPICard";
 import { motion } from "framer-motion";
-import Topbar from "../components/Topbar";
 
 export default function Dashboard() {
   const [data, setData] = useState(null);
@@ -25,11 +24,11 @@ export default function Dashboard() {
       .catch((err) => console.error(err));
   }, []);
 
-  if (!data) return <div className="text-gray-700 dark:text-gray-200">Loading...</div>;
+  if (!data) return <div className="text-slate-700 dark:text-slate-200">Loading...</div>;
 
   const totalApplications = data.candidatesByStage.reduce(
     (sum, item) => sum + item.count,
-    0
+    0,
   );
 
   const hired =
@@ -42,10 +41,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
-      <Topbar />
-
-      {/* KPI CARDS */}
-      <div className="grid grid-cols-4 gap-6">
+      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
         <KPICard title="Total Applications" value={totalApplications} color="text-blue-600" />
         <KPICard title="Hired" value={hired} color="text-green-600" />
         <KPICard title="In Screening" value={screening} color="text-yellow-500" />
@@ -56,38 +52,34 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* CHARTS */}
-      <div className="grid grid-cols-2 gap-6">
-
-        {/* Pipeline Chart */}
+      <div className="grid gap-6 xl:grid-cols-2">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-md p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-lg transition duration-300"
+          className="rounded-2xl border border-slate-200/70 bg-white/75 p-6 shadow-sm backdrop-blur-md transition duration-300 hover:shadow-lg dark:border-slate-700 dark:bg-slate-900/70"
         >
-          <h2 className="text-lg font-semibold mb-4 text-gray-800 dark:text-gray-100">
+          <h2 className="mb-4 text-lg font-semibold text-slate-800 dark:text-slate-100">
             Pipeline
           </h2>
 
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={data.candidatesByStage}>
-              <XAxis dataKey="status" stroke="#9ca3af" />
-              <YAxis stroke="#9ca3af" />
+              <XAxis dataKey="status" stroke="#94a3b8" />
+              <YAxis stroke="#94a3b8" />
               <Tooltip />
               <Bar dataKey="count" fill="#3b82f6" />
             </BarChart>
           </ResponsiveContainer>
         </motion.div>
 
-        {/* Conversion Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-md p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col justify-center items-center hover:shadow-lg transition duration-300"
+          className="flex flex-col items-center justify-center rounded-2xl border border-slate-200/70 bg-white/75 p-6 shadow-sm backdrop-blur-md transition duration-300 hover:shadow-lg dark:border-slate-700 dark:bg-slate-900/70"
         >
-          <h2 className="text-lg font-semibold mb-2 text-gray-800 dark:text-gray-100">
+          <h2 className="mb-2 text-lg font-semibold text-slate-800 dark:text-slate-100">
             Conversion Rate
           </h2>
 
@@ -95,19 +87,18 @@ export default function Dashboard() {
             {Number(data.conversionRate.conversion_rate || 0).toFixed(2)}%
           </p>
 
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-            Candidates → Hired
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+            Candidates to Hired
           </p>
         </motion.div>
 
-        {/* Pie Chart */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-md p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition col-span-2"
+          className="col-span-full rounded-2xl border border-slate-200/70 bg-white/75 p-6 shadow-sm backdrop-blur-md transition hover:shadow-md dark:border-slate-700 dark:bg-slate-900/70"
         >
-          <h2 className="text-lg font-semibold mb-4 text-gray-800 dark:text-gray-100">
+          <h2 className="mb-4 text-lg font-semibold text-slate-800 dark:text-slate-100">
             Employees by Department
           </h2>
 
@@ -129,7 +120,6 @@ export default function Dashboard() {
             </PieChart>
           </ResponsiveContainer>
         </motion.div>
-
       </div>
     </div>
   );

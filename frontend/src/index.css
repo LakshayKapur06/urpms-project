@@ -1,6 +1,21 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
 body {
-  @apply bg-gradient-to-br from-gray-100 via-white to-gray-200;
+  @apply min-h-screen bg-gradient-to-br from-slate-100 via-white to-slate-200 text-slate-900 transition-colors duration-300 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800 dark:text-slate-100;
+  font-family: "Inter", sans-serif;
+}
+
+#root {
+  @apply min-h-screen;
 }
 
 ::-webkit-scrollbar {
@@ -8,10 +23,10 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5f5;
+  background: #94a3b8;
   border-radius: 10px;
 }
 
-body {
-  font-family: 'Inter', sans-serif;
+html.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
 }

@@ -7,13 +7,11 @@ export default function KPICard({ title, value, color }) {
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ scale: 1.03 }}
       transition={{ duration: 0.3 }}
-      className="backdrop-blur-lg bg-white/70 border border-gray-200 p-5 rounded-2xl shadow-sm"
+      className="rounded-2xl border border-slate-200/70 bg-white/75 p-5 shadow-sm backdrop-blur-lg transition-colors duration-300 dark:border-slate-700 dark:bg-slate-900/70"
     >
-      <p className="text-sm text-gray-500">{title}</p>
+      <p className="text-sm text-slate-500 dark:text-slate-400">{title}</p>
 
-      <p className={`text-3xl font-semibold mt-2 ${color}`}>
-        {value}
-      </p>
+      <p className={`mt-2 text-3xl font-semibold ${color}`}>{value}</p>
     </motion.div>
   );
 }

@@ -1,40 +1,57 @@
 const express = require("express");
-const router = express.Router();
 const db = require("../config/db");
+const { authenticateToken } = require("../middleware/auth");
+const { isValidEmail, isNonEmptyString } = require("../utils/validation");
 
-// Add candidate
+const router = express.Router();
+
+router.use(authenticateToken);
+
 router.post("/", (req, res) => {
   const { first_name, last_name, email, phone } = req.body;
+
+  if (!isNonEmptyString(first_name, 100) || !isNonEmptyString(last_name, 100)) {
+    return res.status(400).json({ error: "First and last name are required" });
+  }
+
+  if (!isValidEmail(email)) {
+    return res.status(400).json({ error: "A valid email is required" });
+  }
+
+  if (!isNonEmptyString(phone, 30)) {
+    return res.status(400).json({ error: "A valid phone number is required" });
+  }
 
   const query = `
     INSERT INTO candidate (first_name, last_name, email, phone)
     VALUES (?, ?, ?, ?)
   `;
 
-  db.query(query, [first_name, last_name, email, phone], (err, result) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: "Database error" });
-    }
+  db.query(
+    query,
+    [first_name.trim(), last_name.trim(), email.trim().toLowerCase(), phone.trim()],
+    (err, result) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: "Database error" });
+      }
 
-    res.json({
-      message: "Candidate added successfully",
-      candidate_id: result.insertId
-    });
-  });
+      return res.status(201).json({
+        message: "Candidate added successfully",
+        candidate_id: result.insertId,
+      });
+    },
+  );
 });
 
-// Get all candidates
 router.get("/", (req, res) => {
-  const query = "SELECT * FROM candidate";
-
-  db.query(query, (err, results) => {
+  db.query("SELECT * FROM candidate", (err, results) => {
     if (err) {
       console.error(err);
       return res.status(500).json({ error: "Database error" });
     }
 
-    res.json(results);
+    return res.json(results);
   });
 });
 

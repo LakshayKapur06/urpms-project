@@ -1,11 +1,19 @@
 const express = require("express");
-const router = express.Router();
 const db = require("../config/db");
+const { authenticateToken } = require("../middleware/auth");
+
+const router = express.Router();
+
+router.use(authenticateToken);
 
 router.get("/", (req, res) => {
   db.query("SELECT * FROM employee", (err, results) => {
-    if (err) return res.status(500).json(err);
-    res.json(results);
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Database error" });
+    }
+
+    return res.json(results);
   });
 });
 
