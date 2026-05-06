@@ -46,8 +46,8 @@ export default function Dashboard() {
   const hired =
     data.candidatesByStage.find((s) => s.status === "HIRED")?.count || 0;
 
-  const screening =
-    data.candidatesByStage.find((s) => s.status === "SCREENING")?.count || 0;
+  const shortlisted =
+    data.candidatesByStage.find((s) => s.status === "SHORTLISTED")?.count || 0;
 
   const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444"];
   const tooltipStyle = {
@@ -69,7 +69,7 @@ export default function Dashboard() {
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
         <KPICard title="Total Applications" value={totalApplications} color="text-blue-600" />
         <KPICard title="Hired" value={hired} color="text-green-600" />
-        <KPICard title="In Screening" value={screening} color="text-yellow-500" />
+        <KPICard title="Shortlisted" value={shortlisted} color="text-yellow-500" />
         <KPICard
           title="Conversion Rate"
           value={`${Number(data.conversionRate.conversion_rate || 0).toFixed(1)}%`}

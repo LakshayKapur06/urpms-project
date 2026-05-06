@@ -506,9 +506,16 @@ router.post("/:id/feedback", requireRole("ADMIN"), (req, res) => {
             return res.status(201).json({ message: "Feedback saved successfully" });
           }
 
-          return res.status(201).json({
-            message: "Feedback saved successfully",
-            feedback: rows[0],
+          return getApplicationDetailsById(application_id, (applicationErr, applicationDetails) => {
+            if (applicationErr) {
+              console.error(applicationErr);
+            }
+
+            return res.status(201).json({
+              message: "Feedback saved successfully",
+              feedback: rows[0],
+              application: applicationDetails,
+            });
           });
         },
       );

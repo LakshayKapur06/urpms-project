@@ -21,6 +21,23 @@ const initialFeedbackForm = {
   remarks: "",
 };
 
+const initialHireForm = {
+  application_id: null,
+  department: "",
+  base_salary: "",
+  bonus_percentage: "",
+};
+
+function replaceApplication(currentApps, updatedApplication) {
+  if (!updatedApplication) {
+    return currentApps;
+  }
+
+  return currentApps.map((app) =>
+    app.application_id === updatedApplication.application_id ? updatedApplication : app,
+  );
+}
+
 export default function Applications() {
   const [apps, setApps] = useState([]);
   const [filters, setFilters] = useState(initialFilters);
@@ -31,6 +48,7 @@ export default function Applications() {
   const [activeView, setActiveView] = useState("all");
   const [scheduleForm, setScheduleForm] = useState(initialScheduleForm);
   const [feedbackForm, setFeedbackForm] = useState(initialFeedbackForm);
+  const [hireForm, setHireForm] = useState(initialHireForm);
 
   const loadApplications = async (scoreFilter = "") => {
     try {
@@ -57,15 +75,26 @@ export default function Applications() {
     loadApplications();
   }, []);
 
+  const closeInlineForms = (applicationId) => {
+    if (scheduleForm.application_id === applicationId) {
+      setScheduleForm(initialScheduleForm);
+    }
+
+    if (feedbackForm.application_id === applicationId) {
+      setFeedbackForm(initialFeedbackForm);
+    }
+
+    if (hireForm.application_id === applicationId) {
+      setHireForm(initialHireForm);
+    }
+  };
+
   const updateStatus = async (id, status) => {
     try {
       setBusyId(id);
       const res = await API.put(`/applications/${id}/status`, { new_status: status });
-      setApps((current) =>
-        current.map((app) =>
-          app.application_id === id ? { ...app, status: res.data.to } : app,
-        ),
-      );
+      setApps((current) => replaceApplication(current, res.data.application));
+      closeInlineForms(id);
       setNotice({ type: "success", message: `Application moved to ${res.data.to}.` });
     } catch (error) {
       setNotice({
@@ -90,18 +119,7 @@ export default function Applications() {
         },
       );
 
-      setApps((current) =>
-        current.map((app) =>
-          app.application_id === scheduleForm.application_id
-            ? {
-                ...app,
-                status: res.data.to,
-                interview_date: scheduleForm.interview_date,
-                interviewer_name: scheduleForm.interviewer_name,
-              }
-            : app,
-        ),
-      );
+      setApps((current) => replaceApplication(current, res.data.application));
       setScheduleForm(initialScheduleForm);
       setNotice({ type: "success", message: "Interview scheduled successfully." });
     } catch (error) {
@@ -118,11 +136,7 @@ export default function Applications() {
     try {
       setBusyId(id);
       const res = await API.put(`/applications/${id}/interviewed`);
-      setApps((current) =>
-        current.map((app) =>
-          app.application_id === id ? { ...app, status: res.data.to } : app,
-        ),
-      );
+      setApps((current) => replaceApplication(current, res.data.application));
       setNotice({ type: "success", message: "Application marked as interviewed." });
     } catch (error) {
       setNotice({
@@ -148,16 +162,7 @@ export default function Applications() {
         },
       );
 
-      setApps((current) =>
-        current.map((app) =>
-          app.application_id === feedbackForm.application_id
-            ? {
-                ...app,
-                ...(res.data.feedback || {}),
-              }
-            : app,
-        ),
-      );
+      setApps((current) => replaceApplication(current, res.data.application));
       setFeedbackForm(initialFeedbackForm);
       setNotice({ type: "success", message: res.data.message || "Feedback saved successfully." });
     } catch (error) {
@@ -170,21 +175,20 @@ export default function Applications() {
     }
   };
 
-  const hireCandidate = async (id) => {
+  const hireCandidate = async (event) => {
+    event.preventDefault();
+
     try {
-      setBusyId(id);
-      const res = await API.post(`/applications/${id}/hire`, {
-        department: "Engineering",
-        base_salary: 800000,
-        bonus_percentage: 10,
+      setBusyId(hireForm.application_id);
+      const res = await API.post(`/applications/${hireForm.application_id}/hire`, {
+        department: hireForm.department,
+        base_salary: hireForm.base_salary,
+        bonus_percentage: hireForm.bonus_percentage,
       });
 
-      setApps((current) =>
-        current.map((app) =>
-          app.application_id === id ? { ...app, status: res.data.status || "HIRED" } : app,
-        ),
-      );
-      setNotice({ type: "success", message: "Candidate hired successfully." });
+      setApps((current) => replaceApplication(current, res.data.application));
+      setHireForm(initialHireForm);
+      setNotice({ type: "success", message: res.data.message || "Candidate hired successfully." });
     } catch (error) {
       setNotice({
         type: "error",
@@ -200,6 +204,7 @@ export default function Applications() {
       setBusyId(id);
       const res = await API.delete(`/applications/${id}`);
       setApps((current) => current.filter((app) => app.application_id !== id));
+      closeInlineForms(id);
       setNotice({ type: "success", message: res.data.message || "Application removed." });
     } catch (error) {
       setNotice({
@@ -250,7 +255,7 @@ export default function Applications() {
           Applications
         </h1>
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-          Manage the full recruitment pipeline from shortlist to hire, including interview scheduling and feedback.
+          Manage the full recruitment pipeline from shortlist to hire, including interview scheduling, structured feedback, and final offer conversion.
         </p>
       </div>
 
@@ -339,246 +344,334 @@ export default function Applications() {
       ) : null}
 
       {!isLoading &&
-        apps.map((a) => (
-          <div
-            key={a.application_id}
-            className="rounded-2xl border border-slate-200/70 bg-white/70 p-4 text-slate-700 shadow-sm transition-colors duration-300 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <p className="font-medium">
-                  Application #{a.application_id} - {a.first_name} {a.last_name}
-                </p>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{a.email}</p>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                  {a.job_role} {"\u2022"} {a.application_source || "Unknown source"}
-                </p>
+        apps.map((a) => {
+          const isScheduling = scheduleForm.application_id === a.application_id;
+          const isAddingFeedback = feedbackForm.application_id === a.application_id;
+          const isHiring = hireForm.application_id === a.application_id;
+
+          return (
+            <div
+              key={a.application_id}
+              className="rounded-2xl border border-slate-200/70 bg-white/70 p-4 text-slate-700 shadow-sm transition-colors duration-300 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p className="font-medium">
+                    Application #{a.application_id} - {a.first_name} {a.last_name}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{a.email}</p>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    {a.job_role} {"\u2022"} {a.application_source || "Unknown source"}
+                  </p>
+                </div>
+                <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                  {a.status}
+                </span>
               </div>
-              <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                {a.status}
-              </span>
-            </div>
 
-            <div className="mt-3 grid gap-2 text-sm text-slate-600 dark:text-slate-300 md:grid-cols-2 xl:grid-cols-4">
-              <p>Expected Salary: {a.expected_salary ?? "N/A"}</p>
-              <p>Notice Period: {a.notice_period ?? "N/A"} days</p>
-              <p>CGPA: {a.cgpa ?? "N/A"}</p>
-              <p>Experience: {a.experience_years ?? 0} years</p>
-            </div>
+              <div className="mt-3 grid gap-2 text-sm text-slate-600 dark:text-slate-300 md:grid-cols-2 xl:grid-cols-4">
+                <p>Expected Salary: {a.expected_salary ?? "N/A"}</p>
+                <p>Notice Period: {a.notice_period ?? "N/A"} days</p>
+                <p>CGPA: {a.cgpa ?? "N/A"}</p>
+                <p>Experience: {a.experience_years ?? 0} years</p>
+              </div>
 
-            <div className="mt-2 grid gap-2 text-sm text-slate-600 dark:text-slate-300 md:grid-cols-2 xl:grid-cols-4">
-              <p>Technical Score: {a.technical_score ?? "N/A"}</p>
-              <p>Communication Score: {a.communication_score ?? "N/A"}</p>
-              <p>Overall Score: {a.overall_score ?? "N/A"}</p>
-              <p>Specialization: {a.specialization || "N/A"}</p>
-            </div>
+              <div className="mt-2 grid gap-2 text-sm text-slate-600 dark:text-slate-300 md:grid-cols-2 xl:grid-cols-4">
+                <p>Technical Score: {a.technical_score ?? "N/A"}</p>
+                <p>Communication Score: {a.communication_score ?? "N/A"}</p>
+                <p>Overall Score: {a.overall_score ?? "N/A"}</p>
+                <p>Specialization: {a.specialization || "N/A"}</p>
+              </div>
 
-            <div className="mt-2 grid gap-2 text-sm text-slate-600 dark:text-slate-300 md:grid-cols-2">
-              <p>Interview Date: {a.interview_date ? new Date(a.interview_date).toLocaleString() : "Not scheduled"}</p>
-              <p>Interviewer: {a.interviewer_name || "Not assigned"}</p>
-            </div>
+              <div className="mt-2 grid gap-2 text-sm text-slate-600 dark:text-slate-300 md:grid-cols-2">
+                <p>
+                  Interview Date:{" "}
+                  {a.interview_date ? new Date(a.interview_date).toLocaleString() : "Not scheduled"}
+                </p>
+                <p>Interviewer: {a.interviewer_name || "Not assigned"}</p>
+              </div>
 
-            {a.remarks ? (
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                Interview feedback: {a.remarks}
-              </p>
-            ) : null}
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              {a.status === "APPLIED" ? (
-                <button
-                  className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-300"
-                  onClick={() => updateStatus(a.application_id, "SHORTLISTED")}
-                  disabled={busyId === a.application_id}
-                >
-                  {busyId === a.application_id ? "Updating..." : "Shortlist"}
-                </button>
+              {a.remarks ? (
+                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                  Interview feedback: {a.remarks}
+                </p>
               ) : null}
 
-              {a.status === "SHORTLISTED" ? (
-                <button
-                  className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-500"
-                  onClick={() =>
-                    setScheduleForm({
-                      application_id: a.application_id,
-                      interview_date: a.interview_date ? a.interview_date.slice(0, 16) : "",
-                      interviewer_name: a.interviewer_name || "",
-                    })
-                  }
-                >
-                  Schedule Interview
-                </button>
-              ) : null}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {a.status === "APPLIED" ? (
+                  <button
+                    className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-300"
+                    onClick={() => updateStatus(a.application_id, "SHORTLISTED")}
+                    disabled={busyId === a.application_id}
+                  >
+                    {busyId === a.application_id ? "Updating..." : "Shortlist"}
+                  </button>
+                ) : null}
 
-              {a.status === "INTERVIEW_SCHEDULED" ? (
+                {a.status === "SHORTLISTED" ? (
+                  <button
+                    className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-500"
+                    onClick={() => {
+                      setHireForm(initialHireForm);
+                      setFeedbackForm(initialFeedbackForm);
+                      setScheduleForm({
+                        application_id: a.application_id,
+                        interview_date: a.interview_date ? a.interview_date.slice(0, 16) : "",
+                        interviewer_name: a.interviewer_name || "",
+                      });
+                    }}
+                  >
+                    {isScheduling ? "Editing Schedule" : "Schedule Interview"}
+                  </button>
+                ) : null}
+
+                {a.status === "INTERVIEW_SCHEDULED" ? (
+                  <button
+                    className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-300"
+                    onClick={() => markInterviewed(a.application_id)}
+                    disabled={busyId === a.application_id}
+                  >
+                    {busyId === a.application_id ? "Updating..." : "Mark Interviewed"}
+                  </button>
+                ) : null}
+
+                {a.status === "INTERVIEWED" ? (
+                  <button
+                    className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-300"
+                    onClick={() => updateStatus(a.application_id, "OFFERED")}
+                    disabled={busyId === a.application_id}
+                  >
+                    {busyId === a.application_id ? "Updating..." : "Offer"}
+                  </button>
+                ) : null}
+
+                {a.status === "OFFERED" ? (
+                  <button
+                    className="rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-green-500"
+                    onClick={() => {
+                      setScheduleForm(initialScheduleForm);
+                      setFeedbackForm(initialFeedbackForm);
+                      setHireForm({
+                        application_id: a.application_id,
+                        department: "",
+                        base_salary: a.expected_salary || "",
+                        bonus_percentage: "",
+                      });
+                    }}
+                  >
+                    {isHiring ? "Edit Offer Details" : "Hire"}
+                  </button>
+                ) : null}
+
+                {["APPLIED", "SHORTLISTED", "INTERVIEW_SCHEDULED", "INTERVIEWED", "OFFERED"].includes(a.status) ? (
+                  <button
+                    className="rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:bg-amber-300"
+                    onClick={() => updateStatus(a.application_id, "REJECTED")}
+                    disabled={busyId === a.application_id}
+                  >
+                    {busyId === a.application_id ? "Updating..." : "Reject"}
+                  </button>
+                ) : null}
+
                 <button
-                  className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-300"
-                  onClick={() => markInterviewed(a.application_id)}
+                  className="rounded-lg bg-rose-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:bg-rose-300"
+                  onClick={() => removeApplication(a.application_id)}
                   disabled={busyId === a.application_id}
                 >
-                  {busyId === a.application_id ? "Updating..." : "Mark Interviewed"}
+                  {busyId === a.application_id ? "Removing..." : "Remove from Pipeline"}
                 </button>
+              </div>
+
+              {isScheduling ? (
+                <form onSubmit={scheduleInterview} className="mt-4 grid gap-3 md:grid-cols-2">
+                  <input
+                    type="datetime-local"
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                    value={scheduleForm.interview_date}
+                    onChange={(e) =>
+                      setScheduleForm((current) => ({ ...current, interview_date: e.target.value }))
+                    }
+                  />
+                  <input
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                    placeholder="Interviewer Name"
+                    value={scheduleForm.interviewer_name}
+                    onChange={(e) =>
+                      setScheduleForm((current) => ({ ...current, interviewer_name: e.target.value }))
+                    }
+                  />
+                  <div className="flex gap-2 md:col-span-2">
+                    <button
+                      type="submit"
+                      className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-300"
+                      disabled={busyId === a.application_id}
+                    >
+                      {busyId === a.application_id ? "Saving..." : "Save Interview Schedule"}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                      onClick={() => setScheduleForm(initialScheduleForm)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
               ) : null}
 
               {a.status === "INTERVIEWED" ? (
-                <button
-                  className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-300"
-                  onClick={() => updateStatus(a.application_id, "OFFERED")}
-                  disabled={busyId === a.application_id}
+                <form
+                  onSubmit={saveFeedback}
+                  className="mt-4 grid gap-3 rounded-2xl border border-slate-200/70 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-900/40 md:grid-cols-2"
                 >
-                  {busyId === a.application_id ? "Updating..." : "Offer"}
-                </button>
-              ) : null}
-
-              {a.status === "OFFERED" ? (
-                <button
-                  className="rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-green-500 disabled:cursor-not-allowed disabled:bg-green-300"
-                  onClick={() => hireCandidate(a.application_id)}
-                  disabled={busyId === a.application_id}
-                >
-                  {busyId === a.application_id ? "Hiring..." : "Hire"}
-                </button>
-              ) : null}
-
-              {["APPLIED", "SHORTLISTED", "INTERVIEW_SCHEDULED", "INTERVIEWED", "OFFERED"].includes(a.status) ? (
-                <button
-                  className="rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:bg-amber-300"
-                  onClick={() => updateStatus(a.application_id, "REJECTED")}
-                  disabled={busyId === a.application_id}
-                >
-                  {busyId === a.application_id ? "Updating..." : "Reject"}
-                </button>
-              ) : null}
-
-              <button
-                className="rounded-lg bg-rose-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:bg-rose-300"
-                onClick={() => removeApplication(a.application_id)}
-                disabled={busyId === a.application_id}
-              >
-                {busyId === a.application_id ? "Removing..." : "Remove from Pipeline"}
-              </button>
-            </div>
-
-            {scheduleForm.application_id === a.application_id ? (
-              <form onSubmit={scheduleInterview} className="mt-4 grid gap-3 md:grid-cols-2">
-                <input
-                  type="datetime-local"
-                  className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                  value={scheduleForm.interview_date}
-                  onChange={(e) =>
-                    setScheduleForm((current) => ({ ...current, interview_date: e.target.value }))
-                  }
-                />
-                <input
-                  className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                  placeholder="Interviewer Name"
-                  value={scheduleForm.interviewer_name}
-                  onChange={(e) =>
-                    setScheduleForm((current) => ({ ...current, interviewer_name: e.target.value }))
-                  }
-                />
-                <div className="flex gap-2 md:col-span-2">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                    placeholder="Technical Score"
+                    value={isAddingFeedback ? feedbackForm.technical_score : ""}
+                    onFocus={() =>
+                      setFeedbackForm((current) =>
+                        current.application_id === a.application_id
+                          ? current
+                          : {
+                              application_id: a.application_id,
+                              technical_score: a.technical_score ?? "",
+                              communication_score: a.communication_score ?? "",
+                              remarks: a.remarks || "",
+                            },
+                      )
+                    }
+                    onChange={(e) =>
+                      setFeedbackForm((current) => ({
+                        ...current,
+                        application_id: a.application_id,
+                        technical_score: e.target.value,
+                      }))
+                    }
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                    placeholder="Communication Score"
+                    value={isAddingFeedback ? feedbackForm.communication_score : ""}
+                    onFocus={() =>
+                      setFeedbackForm((current) =>
+                        current.application_id === a.application_id
+                          ? current
+                          : {
+                              application_id: a.application_id,
+                              technical_score: a.technical_score ?? "",
+                              communication_score: a.communication_score ?? "",
+                              remarks: a.remarks || "",
+                            },
+                      )
+                    }
+                    onChange={(e) =>
+                      setFeedbackForm((current) => ({
+                        ...current,
+                        application_id: a.application_id,
+                        communication_score: e.target.value,
+                      }))
+                    }
+                  />
+                  <textarea
+                    className="min-h-24 rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 md:col-span-2"
+                    placeholder="Remarks"
+                    value={isAddingFeedback ? feedbackForm.remarks : ""}
+                    onFocus={() =>
+                      setFeedbackForm((current) =>
+                        current.application_id === a.application_id
+                          ? current
+                          : {
+                              application_id: a.application_id,
+                              technical_score: a.technical_score ?? "",
+                              communication_score: a.communication_score ?? "",
+                              remarks: a.remarks || "",
+                            },
+                      )
+                    }
+                    onChange={(e) =>
+                      setFeedbackForm((current) => ({
+                        ...current,
+                        application_id: a.application_id,
+                        remarks: e.target.value,
+                      }))
+                    }
+                  />
                   <button
                     type="submit"
-                    className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-500"
+                    className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:bg-violet-300 md:col-span-2"
+                    disabled={busyId === a.application_id}
                   >
-                    Save Interview Schedule
+                    {busyId === a.application_id ? "Saving..." : "Save Feedback"}
                   </button>
-                  <button
-                    type="button"
-                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
-                    onClick={() => setScheduleForm(initialScheduleForm)}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            ) : null}
+                </form>
+              ) : null}
 
-            {a.status === "INTERVIEWED" ? (
-              <form
-                onSubmit={saveFeedback}
-                className="mt-4 grid gap-3 rounded-2xl border border-slate-200/70 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-900/40 md:grid-cols-2"
-              >
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                  placeholder="Technical Score"
-                  value={feedbackForm.application_id === a.application_id ? feedbackForm.technical_score : ""}
-                  onFocus={() =>
-                    setFeedbackForm((current) =>
-                      current.application_id === a.application_id
-                        ? current
-                        : { ...initialFeedbackForm, application_id: a.application_id },
-                    )
-                  }
-                  onChange={(e) =>
-                    setFeedbackForm((current) => ({
-                      ...current,
-                      application_id: a.application_id,
-                      technical_score: e.target.value,
-                    }))
-                  }
-                />
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                  placeholder="Communication Score"
-                  value={feedbackForm.application_id === a.application_id ? feedbackForm.communication_score : ""}
-                  onFocus={() =>
-                    setFeedbackForm((current) =>
-                      current.application_id === a.application_id
-                        ? current
-                        : { ...initialFeedbackForm, application_id: a.application_id },
-                    )
-                  }
-                  onChange={(e) =>
-                    setFeedbackForm((current) => ({
-                      ...current,
-                      application_id: a.application_id,
-                      communication_score: e.target.value,
-                    }))
-                  }
-                />
-                <textarea
-                  className="min-h-24 rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 md:col-span-2"
-                  placeholder="Remarks"
-                  value={feedbackForm.application_id === a.application_id ? feedbackForm.remarks : ""}
-                  onFocus={() =>
-                    setFeedbackForm((current) =>
-                      current.application_id === a.application_id
-                        ? current
-                        : { ...initialFeedbackForm, application_id: a.application_id },
-                    )
-                  }
-                  onChange={(e) =>
-                    setFeedbackForm((current) => ({
-                      ...current,
-                      application_id: a.application_id,
-                      remarks: e.target.value,
-                    }))
-                  }
-                />
-                <button
-                  type="submit"
-                  className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-violet-500 md:col-span-2"
+              {isHiring ? (
+                <form
+                  onSubmit={hireCandidate}
+                  className="mt-4 grid gap-3 rounded-2xl border border-emerald-200/80 bg-emerald-50/80 p-4 dark:border-emerald-900 dark:bg-emerald-950/20 md:grid-cols-3"
                 >
-                  Save Feedback
-                </button>
-              </form>
-            ) : null}
+                  <input
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-emerald-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                    placeholder="Department"
+                    value={hireForm.department}
+                    onChange={(e) =>
+                      setHireForm((current) => ({ ...current, department: e.target.value }))
+                    }
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-emerald-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                    placeholder="Base Salary"
+                    value={hireForm.base_salary}
+                    onChange={(e) =>
+                      setHireForm((current) => ({ ...current, base_salary: e.target.value }))
+                    }
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-emerald-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                    placeholder="Bonus Percentage"
+                    value={hireForm.bonus_percentage}
+                    onChange={(e) =>
+                      setHireForm((current) => ({ ...current, bonus_percentage: e.target.value }))
+                    }
+                  />
+                  <div className="flex gap-2 md:col-span-3">
+                    <button
+                      type="submit"
+                      className="rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-green-500 disabled:cursor-not-allowed disabled:bg-green-300"
+                      disabled={busyId === a.application_id}
+                    >
+                      {busyId === a.application_id ? "Hiring..." : "Confirm Hire"}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                      onClick={() => setHireForm(initialHireForm)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              ) : null}
 
-            {a.status === "HIRED" || a.status === "REJECTED" ? (
-              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                This application has reached a terminal stage.
-              </p>
-            ) : null}
-          </div>
-        ))}
+              {a.status === "HIRED" || a.status === "REJECTED" ? (
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  This application has reached a terminal stage.
+                </p>
+              ) : null}
+            </div>
+          );
+        })}
     </div>
   );
 }

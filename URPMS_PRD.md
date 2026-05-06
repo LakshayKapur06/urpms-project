@@ -188,9 +188,13 @@ Current application UI behavior:
   - `SHORTLISTED`: Schedule Interview, Reject
   - `INTERVIEW_SCHEDULED`: Mark Interviewed, Reject
   - `INTERVIEWED`: Save Feedback, Offer, Reject
-  - `OFFERED`: Hire, Reject
+  - `OFFERED`: open hire form, confirm hire, Reject
   - `HIRED`: terminal badge/state
   - `REJECTED`: terminal badge/state
+- Hire flow captures:
+  - department
+  - base salary
+  - bonus percentage
 - Remove from pipeline action
 - On-screen success/error banners
 
@@ -219,6 +223,7 @@ Current behavior:
   - `hire_candidate(application_id, department, base_salary, bonus_percentage)`
 - Successful hire updates the application to `HIRED`.
 - Employee data becomes visible in the employee listing and available to payroll workflows.
+- Frontend collects department, base salary, and bonus percentage before confirming hire.
 
 ### 8.6 Payroll
 Purpose:
@@ -237,6 +242,10 @@ Current UI behavior:
 - Payroll list showing:
   - payroll ID
   - employee ID
+  - employee name
+  - employee email
+  - department
+  - joining date
   - payroll month/year
   - gross salary
   - payment status
@@ -249,8 +258,7 @@ Purpose:
 Current dashboard metrics:
 - Total applications
 - Hired count
-- In-screening KPI slot
-  - Note: the current UI label still says "In Screening" even though the official status model no longer uses `SCREENING`
+- Shortlisted count
 - Conversion rate
 - Candidates/applications by stage
 - Employees by department
@@ -379,6 +387,7 @@ URPMS is intentionally DBMS-heavy. The project relies on MySQL not only for pers
 ### Hiring Requirements
 - System must only allow hiring from `OFFERED`.
 - System must hire through stored procedure, not direct ad hoc SQL.
+- System must collect department, base salary, and bonus percentage during the hire flow.
 - Successful hire must reflect in application status and employee availability.
 
 ### Payroll Requirements
@@ -453,13 +462,7 @@ URPMS is intentionally DBMS-heavy. The project relies on MySQL not only for pers
 - Keep frontend component-based
 - Ensure basic responsiveness across desktop and laptop layouts
 
-## 16. Known Current Gaps
-- The dashboard KPI label "In Screening" is outdated relative to the official status model and should be renamed in a future polish pass.
-- The frontend is currently single-role in experience even though the database supports role-based users.
-- Payroll UI is operational but intentionally simple and does not yet show a richer breakdown of salary components.
-- The system is designed for internal/admin use and not for public self-service traffic.
-
-## 17. Suggested Evaluation Angles for Claude
+## 16. Suggested Evaluation Angles for Claude
 If this PRD is given to Claude for project analysis/reporting, the most useful review areas are:
 - product completeness vs current implemented scope
 - database-centric architecture quality
@@ -468,11 +471,10 @@ If this PRD is given to Claude for project analysis/reporting, the most useful r
 - security posture for an internal admin tool
 - frontend UX quality for recruiter operations
 - maintainability and future extensibility
-- gaps between current implementation and production-grade enterprise expectations
+- differences between current implementation and production-grade enterprise expectations
 
-## 18. Future Enhancement Opportunities
+## 17. Future Enhancement Opportunities
 - Role-specific dashboards for recruiter, HR, finance, and auditor personas
-- Better hiring offer configuration UI instead of fixed frontend defaults
 - Interview panel management and scheduling integrations
 - Rich payroll breakdown and downloadable payslips
 - Search, pagination, and sorting for large candidate/application sets
