@@ -90,7 +90,14 @@ export default function Dashboard() {
 
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={data.candidatesByStage}>
-              <XAxis dataKey="status" stroke="#94a3b8" />
+              <XAxis 
+                dataKey="status" 
+                stroke="#94a3b8" 
+                tickFormatter={(value) => {
+                  if (value === 'INTERVIEW_SCHEDULED') return 'Scheduled';
+                  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+                }} 
+              />
               <YAxis stroke="#94a3b8" />
               <Tooltip
                 contentStyle={tooltipStyle}
@@ -139,7 +146,6 @@ export default function Dashboard() {
                 dataKey="total"
                 nameKey="department"
                 outerRadius={120}
-                label
               >
                 {data.employeesPerDept.map((_, i) => (
                   <Cell key={i} fill={COLORS[i % COLORS.length]} />
