@@ -1,19 +1,24 @@
 import { useEffect, useState } from "react";
 import API from "../api/api";
 
-const nextStatusMap = {
-  APPLIED: "SCREENING",
-  SCREENING: "SHORTLISTED",
-  SHORTLISTED: "INTERVIEWED",
-  INTERVIEWED: "OFFERED",
-  OFFERED: "HIRED",
-};
-
 const initialFilters = {
   minCgpa: "",
   minExp: "",
   maxSalary: "",
   minScore: "",
+};
+
+const initialScheduleForm = {
+  application_id: null,
+  interview_date: "",
+  interviewer_name: "",
+};
+
+const initialFeedbackForm = {
+  application_id: null,
+  technical_score: "",
+  communication_score: "",
+  remarks: "",
 };
 
 export default function Applications() {
@@ -24,6 +29,8 @@ export default function Applications() {
   const [isLoading, setIsLoading] = useState(true);
   const [isFiltering, setIsFiltering] = useState(false);
   const [activeView, setActiveView] = useState("all");
+  const [scheduleForm, setScheduleForm] = useState(initialScheduleForm);
+  const [feedbackForm, setFeedbackForm] = useState(initialFeedbackForm);
 
   const loadApplications = async (scoreFilter = "") => {
     try {
@@ -54,7 +61,6 @@ export default function Applications() {
     try {
       setBusyId(id);
       const res = await API.put(`/applications/${id}/status`, { new_status: status });
-
       setApps((current) =>
         current.map((app) =>
           app.application_id === id ? { ...app, status: res.data.to } : app,
@@ -65,6 +71,99 @@ export default function Applications() {
       setNotice({
         type: "error",
         message: error.response?.data?.error || "Could not update the application status.",
+      });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const scheduleInterview = async (event) => {
+    event.preventDefault();
+
+    try {
+      setBusyId(scheduleForm.application_id);
+      const res = await API.put(
+        `/applications/${scheduleForm.application_id}/schedule-interview`,
+        {
+          interview_date: scheduleForm.interview_date,
+          interviewer_name: scheduleForm.interviewer_name,
+        },
+      );
+
+      setApps((current) =>
+        current.map((app) =>
+          app.application_id === scheduleForm.application_id
+            ? {
+                ...app,
+                status: res.data.to,
+                interview_date: scheduleForm.interview_date,
+                interviewer_name: scheduleForm.interviewer_name,
+              }
+            : app,
+        ),
+      );
+      setScheduleForm(initialScheduleForm);
+      setNotice({ type: "success", message: "Interview scheduled successfully." });
+    } catch (error) {
+      setNotice({
+        type: "error",
+        message: error.response?.data?.error || "Could not schedule the interview.",
+      });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const markInterviewed = async (id) => {
+    try {
+      setBusyId(id);
+      const res = await API.put(`/applications/${id}/interviewed`);
+      setApps((current) =>
+        current.map((app) =>
+          app.application_id === id ? { ...app, status: res.data.to } : app,
+        ),
+      );
+      setNotice({ type: "success", message: "Application marked as interviewed." });
+    } catch (error) {
+      setNotice({
+        type: "error",
+        message: error.response?.data?.error || "Could not mark the application as interviewed.",
+      });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const saveFeedback = async (event) => {
+    event.preventDefault();
+
+    try {
+      setBusyId(feedbackForm.application_id);
+      const res = await API.post(
+        `/applications/${feedbackForm.application_id}/feedback`,
+        {
+          technical_score: feedbackForm.technical_score,
+          communication_score: feedbackForm.communication_score,
+          remarks: feedbackForm.remarks,
+        },
+      );
+
+      setApps((current) =>
+        current.map((app) =>
+          app.application_id === feedbackForm.application_id
+            ? {
+                ...app,
+                ...(res.data.feedback || {}),
+              }
+            : app,
+        ),
+      );
+      setFeedbackForm(initialFeedbackForm);
+      setNotice({ type: "success", message: res.data.message || "Feedback saved successfully." });
+    } catch (error) {
+      setNotice({
+        type: "error",
+        message: error.response?.data?.error || "Could not save interview feedback.",
       });
     } finally {
       setBusyId(null);
@@ -140,8 +239,7 @@ export default function Applications() {
   };
 
   const clearFilters = () => {
-    const reset = initialFilters;
-    setFilters(reset);
+    setFilters(initialFilters);
     loadApplications();
   };
 
@@ -152,7 +250,7 @@ export default function Applications() {
           Applications
         </h1>
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-          Review every application with candidate details, interview scores, stage actions, and pipeline controls.
+          Manage the full recruitment pipeline from shortlist to hire, including interview scheduling and feedback.
         </p>
       </div>
 
@@ -253,7 +351,7 @@ export default function Applications() {
                 </p>
                 <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{a.email}</p>
                 <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                  {a.job_role} · {a.application_source || "Unknown source"}
+                  {a.job_role} {"\u2022"} {a.application_source || "Unknown source"}
                 </p>
               </div>
               <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
@@ -275,6 +373,11 @@ export default function Applications() {
               <p>Specialization: {a.specialization || "N/A"}</p>
             </div>
 
+            <div className="mt-2 grid gap-2 text-sm text-slate-600 dark:text-slate-300 md:grid-cols-2">
+              <p>Interview Date: {a.interview_date ? new Date(a.interview_date).toLocaleString() : "Not scheduled"}</p>
+              <p>Interviewer: {a.interviewer_name || "Not assigned"}</p>
+            </div>
+
             {a.remarks ? (
               <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
                 Interview feedback: {a.remarks}
@@ -282,25 +385,70 @@ export default function Applications() {
             ) : null}
 
             <div className="mt-3 flex flex-wrap gap-2">
-              {nextStatusMap[a.status] && a.status !== "OFFERED" ? (
+              {a.status === "APPLIED" ? (
                 <button
                   className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-300"
-                  onClick={() => updateStatus(a.application_id, nextStatusMap[a.status])}
+                  onClick={() => updateStatus(a.application_id, "SHORTLISTED")}
                   disabled={busyId === a.application_id}
                 >
-                  {busyId === a.application_id
-                    ? "Updating..."
-                    : `Move to ${nextStatusMap[a.status]}`}
+                  {busyId === a.application_id ? "Updating..." : "Shortlist"}
                 </button>
               ) : null}
 
-              <button
-                className="rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-green-500 disabled:cursor-not-allowed disabled:bg-green-300"
-                onClick={() => hireCandidate(a.application_id)}
-                disabled={busyId === a.application_id || a.status !== "OFFERED"}
-              >
-                {busyId === a.application_id && a.status === "OFFERED" ? "Hiring..." : "Hire"}
-              </button>
+              {a.status === "SHORTLISTED" ? (
+                <button
+                  className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-500"
+                  onClick={() =>
+                    setScheduleForm({
+                      application_id: a.application_id,
+                      interview_date: a.interview_date ? a.interview_date.slice(0, 16) : "",
+                      interviewer_name: a.interviewer_name || "",
+                    })
+                  }
+                >
+                  Schedule Interview
+                </button>
+              ) : null}
+
+              {a.status === "INTERVIEW_SCHEDULED" ? (
+                <button
+                  className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-300"
+                  onClick={() => markInterviewed(a.application_id)}
+                  disabled={busyId === a.application_id}
+                >
+                  {busyId === a.application_id ? "Updating..." : "Mark Interviewed"}
+                </button>
+              ) : null}
+
+              {a.status === "INTERVIEWED" ? (
+                <button
+                  className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-300"
+                  onClick={() => updateStatus(a.application_id, "OFFERED")}
+                  disabled={busyId === a.application_id}
+                >
+                  {busyId === a.application_id ? "Updating..." : "Offer"}
+                </button>
+              ) : null}
+
+              {a.status === "OFFERED" ? (
+                <button
+                  className="rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-green-500 disabled:cursor-not-allowed disabled:bg-green-300"
+                  onClick={() => hireCandidate(a.application_id)}
+                  disabled={busyId === a.application_id}
+                >
+                  {busyId === a.application_id ? "Hiring..." : "Hire"}
+                </button>
+              ) : null}
+
+              {["APPLIED", "SHORTLISTED", "INTERVIEW_SCHEDULED", "INTERVIEWED", "OFFERED"].includes(a.status) ? (
+                <button
+                  className="rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:bg-amber-300"
+                  onClick={() => updateStatus(a.application_id, "REJECTED")}
+                  disabled={busyId === a.application_id}
+                >
+                  {busyId === a.application_id ? "Updating..." : "Reject"}
+                </button>
+              ) : null}
 
               <button
                 className="rounded-lg bg-rose-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:bg-rose-300"
@@ -311,9 +459,122 @@ export default function Applications() {
               </button>
             </div>
 
-            {a.status !== "OFFERED" && a.status !== "HIRED" ? (
+            {scheduleForm.application_id === a.application_id ? (
+              <form onSubmit={scheduleInterview} className="mt-4 grid gap-3 md:grid-cols-2">
+                <input
+                  type="datetime-local"
+                  className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  value={scheduleForm.interview_date}
+                  onChange={(e) =>
+                    setScheduleForm((current) => ({ ...current, interview_date: e.target.value }))
+                  }
+                />
+                <input
+                  className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  placeholder="Interviewer Name"
+                  value={scheduleForm.interviewer_name}
+                  onChange={(e) =>
+                    setScheduleForm((current) => ({ ...current, interviewer_name: e.target.value }))
+                  }
+                />
+                <div className="flex gap-2 md:col-span-2">
+                  <button
+                    type="submit"
+                    className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-500"
+                  >
+                    Save Interview Schedule
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                    onClick={() => setScheduleForm(initialScheduleForm)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : null}
+
+            {a.status === "INTERVIEWED" ? (
+              <form
+                onSubmit={saveFeedback}
+                className="mt-4 grid gap-3 rounded-2xl border border-slate-200/70 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-900/40 md:grid-cols-2"
+              >
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  placeholder="Technical Score"
+                  value={feedbackForm.application_id === a.application_id ? feedbackForm.technical_score : ""}
+                  onFocus={() =>
+                    setFeedbackForm((current) =>
+                      current.application_id === a.application_id
+                        ? current
+                        : { ...initialFeedbackForm, application_id: a.application_id },
+                    )
+                  }
+                  onChange={(e) =>
+                    setFeedbackForm((current) => ({
+                      ...current,
+                      application_id: a.application_id,
+                      technical_score: e.target.value,
+                    }))
+                  }
+                />
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  placeholder="Communication Score"
+                  value={feedbackForm.application_id === a.application_id ? feedbackForm.communication_score : ""}
+                  onFocus={() =>
+                    setFeedbackForm((current) =>
+                      current.application_id === a.application_id
+                        ? current
+                        : { ...initialFeedbackForm, application_id: a.application_id },
+                    )
+                  }
+                  onChange={(e) =>
+                    setFeedbackForm((current) => ({
+                      ...current,
+                      application_id: a.application_id,
+                      communication_score: e.target.value,
+                    }))
+                  }
+                />
+                <textarea
+                  className="min-h-24 rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 md:col-span-2"
+                  placeholder="Remarks"
+                  value={feedbackForm.application_id === a.application_id ? feedbackForm.remarks : ""}
+                  onFocus={() =>
+                    setFeedbackForm((current) =>
+                      current.application_id === a.application_id
+                        ? current
+                        : { ...initialFeedbackForm, application_id: a.application_id },
+                    )
+                  }
+                  onChange={(e) =>
+                    setFeedbackForm((current) => ({
+                      ...current,
+                      application_id: a.application_id,
+                      remarks: e.target.value,
+                    }))
+                  }
+                />
+                <button
+                  type="submit"
+                  className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-violet-500 md:col-span-2"
+                >
+                  Save Feedback
+                </button>
+              </form>
+            ) : null}
+
+            {a.status === "HIRED" || a.status === "REJECTED" ? (
               <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                Hiring is enabled after the application reaches OFFERED.
+                This application has reached a terminal stage.
               </p>
             ) : null}
           </div>

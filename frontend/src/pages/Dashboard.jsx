@@ -50,6 +50,19 @@ export default function Dashboard() {
     data.candidatesByStage.find((s) => s.status === "SCREENING")?.count || 0;
 
   const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444"];
+  const tooltipStyle = {
+    backgroundColor: "#0f172a",
+    border: "1px solid #334155",
+    borderRadius: "12px",
+    color: "#f8fafc",
+  };
+  const tooltipLabelStyle = {
+    color: "#f8fafc",
+    fontWeight: 600,
+  };
+  const tooltipItemStyle = {
+    color: "#e2e8f0",
+  };
 
   return (
     <div className="space-y-8">
@@ -79,7 +92,12 @@ export default function Dashboard() {
             <BarChart data={data.candidatesByStage}>
               <XAxis dataKey="status" stroke="#94a3b8" />
               <YAxis stroke="#94a3b8" />
-              <Tooltip />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                labelStyle={tooltipLabelStyle}
+                itemStyle={tooltipItemStyle}
+                cursor={{ fill: "rgba(59, 130, 246, 0.14)" }}
+              />
               <Bar dataKey="count" fill="#3b82f6" />
             </BarChart>
           </ResponsiveContainer>
@@ -127,7 +145,11 @@ export default function Dashboard() {
                   <Cell key={i} fill={COLORS[i % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                labelStyle={tooltipLabelStyle}
+                itemStyle={tooltipItemStyle}
+              />
               <Legend />
             </PieChart>
           </ResponsiveContainer>

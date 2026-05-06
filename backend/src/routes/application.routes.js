@@ -4,12 +4,94 @@ const { authenticateToken, requireRole } = require("../middleware/auth");
 const {
   isNonEmptyString,
   isNonNegativeNumber,
+  isNumberInRange,
   isPositiveInteger,
 } = require("../utils/validation");
 
 const router = express.Router();
 
 router.use(authenticateToken);
+
+const validTransitions = {
+  APPLIED: ["SHORTLISTED", "REJECTED"],
+  SHORTLISTED: ["INTERVIEW_SCHEDULED", "REJECTED"],
+  INTERVIEW_SCHEDULED: ["INTERVIEWED", "REJECTED"],
+  INTERVIEWED: ["OFFERED", "REJECTED"],
+  OFFERED: ["HIRED", "REJECTED"],
+};
+
+function getApplicationById(application_id, callback) {
+  db.query(
+    "SELECT application_id, status FROM application WHERE application_id = ?",
+    [application_id],
+    (err, result) => {
+      if (err) return callback(err);
+      if (!result.length) return callback(null, null);
+      return callback(null, result[0]);
+    },
+  );
+}
+
+function getApplicationDetailsById(application_id, callback) {
+  const query = `
+    SELECT
+      a.application_id,
+      a.candidate_id,
+      a.job_role,
+      a.expected_salary,
+      a.notice_period,
+      a.application_source,
+      a.status,
+      a.applied_at,
+      a.interview_date,
+      a.interviewer_name,
+      c.first_name,
+      c.last_name,
+      c.email,
+      c.phone,
+      c.degree,
+      c.specialization,
+      c.cgpa,
+      c.experience_years,
+      feedback.technical_score,
+      feedback.communication_score,
+      feedback.overall_score,
+      feedback.remarks
+    FROM application a
+    JOIN candidate c ON c.candidate_id = a.candidate_id
+    ${latestFeedbackJoin()}
+    WHERE a.application_id = ?
+    LIMIT 1
+  `;
+
+  db.query(query, [application_id], (err, rows) => {
+    if (err) return callback(err);
+    return callback(null, rows[0] || null);
+  });
+}
+
+function formatInterviewDateTime(value) {
+  if (!isNonEmptyString(value, 100)) {
+    return null;
+  }
+
+  return value.trim().replace("T", " ");
+}
+
+function latestFeedbackJoin() {
+  return `
+    LEFT JOIN (
+      SELECT f1.*
+      FROM interview_feedback f1
+      INNER JOIN (
+        SELECT application_id, MAX(feedback_id) AS latest_feedback_id
+        FROM interview_feedback
+        GROUP BY application_id
+      ) latest
+        ON latest.latest_feedback_id = f1.feedback_id
+    ) feedback ON feedback.application_id = a.application_id
+  `;
+}
 
 router.get("/", (req, res) => {
   const { minScore } = req.query;
@@ -34,6 +116,8 @@ router.get("/", (req, res) => {
       a.application_source,
       a.status,
       a.applied_at,
+      a.interview_date,
+      a.interviewer_name,
       c.first_name,
       c.last_name,
       c.email,
@@ -48,16 +132,7 @@ router.get("/", (req, res) => {
       feedback.remarks
     FROM application a
     JOIN candidate c ON c.candidate_id = a.candidate_id
-    LEFT JOIN (
-      SELECT
-        application_id,
-        MAX(technical_score) AS technical_score,
-        MAX(communication_score) AS communication_score,
-        MAX(overall_score) AS overall_score,
-        MAX(remarks) AS remarks
-      FROM interview_feedback
-      GROUP BY application_id
-    ) feedback ON feedback.application_id = a.application_id
+    ${latestFeedbackJoin()}
     ${scoreFilter}
     ORDER BY a.applied_at DESC, a.application_id DESC
   `;
@@ -102,14 +177,19 @@ router.get("/filter", (req, res) => {
       const placeholders = applicationIds.map(() => "?").join(", ");
       const feedbackQuery = `
         SELECT
-          application_id,
-          MAX(technical_score) AS technical_score,
-          MAX(communication_score) AS communication_score,
-          MAX(overall_score) AS overall_score,
-          MAX(remarks) AS remarks
-        FROM interview_feedback
-        WHERE application_id IN (${placeholders})
-        GROUP BY application_id
+          f1.application_id,
+          f1.technical_score,
+          f1.communication_score,
+          f1.overall_score,
+          f1.remarks
+        FROM interview_feedback f1
+        INNER JOIN (
+          SELECT application_id, MAX(feedback_id) AS latest_feedback_id
+          FROM interview_feedback
+          WHERE application_id IN (${placeholders})
+          GROUP BY application_id
+        ) latest
+          ON latest.latest_feedback_id = f1.feedback_id
       `;
 
       db.query(feedbackQuery, applicationIds, (feedbackErr, feedbackRows) => {
@@ -118,10 +198,7 @@ router.get("/filter", (req, res) => {
           return res.status(500).json({ error: "Failed to load interview feedback" });
         }
 
-        const feedbackMap = new Map(
-          feedbackRows.map((row) => [row.application_id, row]),
-        );
-
+        const feedbackMap = new Map(feedbackRows.map((row) => [row.application_id, row]));
         const merged = filtered.map((row) => ({
           ...row,
           ...(feedbackMap.get(row.application_id) || {}),
@@ -227,45 +304,211 @@ router.put("/:id/status", requireRole("ADMIN"), (req, res) => {
 
   const nextStatus = new_status.trim().toUpperCase();
 
-  db.query(
-    "SELECT status FROM application WHERE application_id = ?",
-    [application_id],
-    (err, result) => {
-      if (err) {
-        console.error(err);
-        return res.status(500).json({ error: "DB error" });
-      }
+  getApplicationById(application_id, (err, application) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: "DB error" });
+    }
 
-      if (result.length === 0) {
-        return res.status(404).json({ error: "Application not found" });
-      }
+    if (!application) {
+      return res.status(404).json({ error: "Application not found" });
+    }
 
-      const current_status = String(result[0].status || "").toUpperCase();
-      const validTransitions = {
-        APPLIED: ["SCREENING"],
-        SCREENING: ["SHORTLISTED"],
-        SHORTLISTED: ["INTERVIEWED"],
-        INTERVIEWED: ["OFFERED"],
-        OFFERED: ["HIRED"],
-      };
+    const current_status = String(application.status || "").toUpperCase();
 
-      if (nextStatus !== "REJECTED" && !validTransitions[current_status]?.includes(nextStatus)) {
-        return res.status(400).json({ error: "Invalid status transition" });
-      }
+    if (!validTransitions[current_status]?.includes(nextStatus)) {
+      return res.status(400).json({ error: "Invalid status transition" });
+    }
 
-      db.query(
-        "UPDATE application SET status = ? WHERE application_id = ?",
-        [nextStatus, application_id],
-        (updateErr) => {
-          if (updateErr) {
-            console.error(updateErr);
-            return res.status(500).json({ error: "Update failed" });
+    db.query(
+      "UPDATE application SET status = ? WHERE application_id = ?",
+      [nextStatus, application_id],
+      (updateErr) => {
+        if (updateErr) {
+          console.error(updateErr);
+          return res.status(500).json({ error: "Update failed" });
+        }
+
+        return getApplicationDetailsById(application_id, (fetchErr, updatedApplication) => {
+          if (fetchErr) {
+            console.error(fetchErr);
           }
 
           return res.json({
             message: "Status updated",
             from: current_status,
             to: nextStatus,
+            application: updatedApplication,
+          });
+        });
+      },
+    );
+  });
+});
+
+router.put("/:id/schedule-interview", requireRole("ADMIN"), (req, res) => {
+  const application_id = Number(req.params.id);
+  const { interview_date, interviewer_name } = req.body;
+
+  if (!isPositiveInteger(application_id)) {
+    return res.status(400).json({ error: "Invalid application id" });
+  }
+
+  if (!isNonEmptyString(interview_date, 100) || !isNonEmptyString(interviewer_name, 100)) {
+    return res.status(400).json({ error: "interview_date and interviewer_name are required" });
+  }
+
+  const normalizedInterviewDate = formatInterviewDateTime(interview_date);
+
+  getApplicationById(application_id, (err, application) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: "DB error" });
+    }
+
+    if (!application) {
+      return res.status(404).json({ error: "Application not found" });
+    }
+
+    const current_status = String(application.status || "").toUpperCase();
+
+    if (!validTransitions[current_status]?.includes("INTERVIEW_SCHEDULED")) {
+      return res.status(400).json({ error: "Only shortlisted applications can be scheduled for interview" });
+    }
+
+    db.query(
+      `
+        UPDATE application
+        SET status = 'INTERVIEW_SCHEDULED',
+            interview_date = ?,
+            interviewer_name = ?
+        WHERE application_id = ?
+      `,
+      [normalizedInterviewDate, interviewer_name.trim(), application_id],
+      (updateErr) => {
+        if (updateErr) {
+          console.error(updateErr);
+          return res.status(500).json({ error: "Failed to schedule interview" });
+        }
+
+        return getApplicationDetailsById(application_id, (fetchErr, updatedApplication) => {
+          if (fetchErr) {
+            console.error(fetchErr);
+          }
+
+          return res.json({
+            message: "Interview scheduled successfully",
+            from: current_status,
+            to: "INTERVIEW_SCHEDULED",
+            application: updatedApplication,
+          });
+        });
+      },
+    );
+  });
+});
+
+router.put("/:id/interviewed", requireRole("ADMIN"), (req, res) => {
+  const application_id = Number(req.params.id);
+
+  if (!isPositiveInteger(application_id)) {
+    return res.status(400).json({ error: "Invalid application id" });
+  }
+
+  getApplicationById(application_id, (err, application) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: "DB error" });
+    }
+
+    if (!application) {
+      return res.status(404).json({ error: "Application not found" });
+    }
+
+    const current_status = String(application.status || "").toUpperCase();
+
+    if (!validTransitions[current_status]?.includes("INTERVIEWED")) {
+      return res.status(400).json({ error: "Only scheduled interviews can be marked as interviewed" });
+    }
+
+    db.query(
+      "UPDATE application SET status = 'INTERVIEWED' WHERE application_id = ?",
+      [application_id],
+      (updateErr) => {
+        if (updateErr) {
+          console.error(updateErr);
+          return res.status(500).json({ error: "Failed to mark application as interviewed" });
+        }
+
+        return getApplicationDetailsById(application_id, (fetchErr, updatedApplication) => {
+          if (fetchErr) {
+            console.error(fetchErr);
+          }
+
+          return res.json({
+            message: "Application marked as interviewed",
+            from: current_status,
+            to: "INTERVIEWED",
+            application: updatedApplication,
+          });
+        });
+      },
+    );
+  });
+});
+
+router.post("/:id/feedback", requireRole("ADMIN"), (req, res) => {
+  const application_id = Number(req.params.id);
+  const { technical_score, communication_score, remarks } = req.body;
+
+  if (!isPositiveInteger(application_id)) {
+    return res.status(400).json({ error: "Invalid application id" });
+  }
+
+  if (!isNumberInRange(technical_score, 0, 100) || !isNumberInRange(communication_score, 0, 100)) {
+    return res.status(400).json({ error: "technical_score and communication_score must be between 0 and 100" });
+  }
+
+  db.query(
+    `
+      INSERT INTO interview_feedback (
+        application_id,
+        technical_score,
+        communication_score,
+        remarks
+      )
+      VALUES (?, ?, ?, ?)
+    `,
+    [
+      application_id,
+      Number(technical_score),
+      Number(communication_score),
+      remarks?.trim() || null,
+    ],
+    (insertErr, result) => {
+      if (insertErr) {
+        console.error(insertErr);
+        return res.status(400).json({
+          error: insertErr.sqlMessage || "Failed to save interview feedback",
+        });
+      }
+
+      db.query(
+        `
+          SELECT feedback_id, application_id, technical_score, communication_score, overall_score, remarks
+          FROM interview_feedback
+          WHERE feedback_id = ?
+        `,
+        [result.insertId],
+        (fetchErr, rows) => {
+          if (fetchErr) {
+            console.error(fetchErr);
+            return res.status(201).json({ message: "Feedback saved successfully" });
+          }
+
+          return res.status(201).json({
+            message: "Feedback saved successfully",
+            feedback: rows[0],
           });
         },
       );
@@ -289,22 +532,46 @@ router.post("/:id/hire", requireRole("ADMIN"), (req, res) => {
     return res.status(400).json({ error: "base_salary and bonus_percentage must be non-negative numbers" });
   }
 
-  db.query(
-    "CALL hire_candidate(?, ?, ?, ?)",
-    [application_id, department.trim(), Number(base_salary), Number(bonus_percentage)],
-    (err) => {
-      if (err) {
-        console.error(err);
-        return res.status(400).json({ error: err.sqlMessage || "Hire operation failed" });
-      }
+  getApplicationById(application_id, (err, application) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: "DB error" });
+    }
 
-      return res.json({
-        message: "Candidate hired successfully",
-        application_id,
-        status: "HIRED",
-      });
-    },
-  );
+    if (!application) {
+      return res.status(404).json({ error: "Application not found" });
+    }
+
+    const current_status = String(application.status || "").toUpperCase();
+
+    if (!validTransitions[current_status]?.includes("HIRED")) {
+      return res.status(400).json({ error: "The application must be OFFERED before it can be hired" });
+    }
+
+    db.query(
+      "CALL hire_candidate(?, ?, ?, ?)",
+      [application_id, department.trim(), Number(base_salary), Number(bonus_percentage)],
+      (hireErr) => {
+        if (hireErr) {
+          console.error(hireErr);
+          return res.status(400).json({ error: hireErr.sqlMessage || "Hire operation failed" });
+        }
+
+        return getApplicationDetailsById(application_id, (fetchErr, updatedApplication) => {
+          if (fetchErr) {
+            console.error(fetchErr);
+          }
+
+          return res.json({
+            message: "Candidate hired successfully",
+            application_id,
+            status: "HIRED",
+            application: updatedApplication,
+          });
+        });
+      },
+    );
+  });
 });
 
 router.delete("/:id", requireRole("ADMIN"), (req, res) => {
@@ -335,10 +602,10 @@ router.delete("/:id", requireRole("ADMIN"), (req, res) => {
           db.query(
             "DELETE FROM application WHERE application_id = ?",
             [application_id],
-            (err, result) => {
-              if (err) {
-                console.error(err);
-                return res.status(400).json({ error: err.sqlMessage || "Failed to remove application" });
+            (deleteErr, result) => {
+              if (deleteErr) {
+                console.error(deleteErr);
+                return res.status(400).json({ error: deleteErr.sqlMessage || "Failed to remove application" });
               }
 
               if (result.affectedRows === 0) {
