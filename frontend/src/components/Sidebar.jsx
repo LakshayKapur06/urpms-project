@@ -1,10 +1,11 @@
-import { LayoutDashboard, Users, Briefcase } from "lucide-react";
+import { LayoutDashboard, Users, Briefcase, Wallet } from "lucide-react";
 
 export default function Sidebar({ setPage }) {
   const menu = [
     { key: "dashboard", label: "Dashboard", icon: <LayoutDashboard /> },
     { key: "candidates", label: "Candidates", icon: <Users /> },
     { key: "applications", label: "Applications", icon: <Briefcase /> },
+    { key: "payroll", label: "Payroll", icon: <Wallet /> },
   ];
 
   return (

@@ -4,12 +4,14 @@ import Topbar from "./components/Topbar";
 import Dashboard from "./pages/Dashboard";
 import Candidates from "./pages/Candidates";
 import Applications from "./pages/Applications";
+import Payroll from "./pages/Payroll";
 import Login from "./pages/Login";
 
 const pageTitles = {
   dashboard: "Dashboard",
   candidates: "Candidates",
   applications: "Applications",
+  payroll: "Payroll",
 };
 
 export default function App() {
@@ -29,6 +31,8 @@ export default function App() {
         return <Candidates />;
       case "applications":
         return <Applications />;
+      case "payroll":
+        return <Payroll />;
       default:
         return <Dashboard />;
     }

@@ -17,12 +17,24 @@ import { motion } from "framer-motion";
 
 export default function Dashboard() {
   const [data, setData] = useState(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     API.get("/dashboard/metrics")
       .then((res) => setData(res.data))
-      .catch((err) => console.error(err));
+      .catch((err) => {
+        console.error(err);
+        setError(err.response?.data?.error || "Failed to load dashboard metrics.");
+      });
   }, []);
+
+  if (error) {
+    return (
+      <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 shadow-sm dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
+        {error}
+      </div>
+    );
+  }
 
   if (!data) return <div className="text-slate-700 dark:text-slate-200">Loading...</div>;
 

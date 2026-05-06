@@ -16,9 +16,25 @@ function isNonNegativeNumber(value) {
   return Number.isFinite(parsed) && parsed >= 0;
 }
 
+function isOptionalString(value, maxLength = 255) {
+  return (
+    value === undefined ||
+    value === null ||
+    value === "" ||
+    (typeof value === "string" && value.trim().length <= maxLength)
+  );
+}
+
+function isNumberInRange(value, min, max) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= min && parsed <= max;
+}
+
 module.exports = {
   isValidEmail,
   isNonEmptyString,
   isPositiveInteger,
   isNonNegativeNumber,
+  isOptionalString,
+  isNumberInRange,
 };

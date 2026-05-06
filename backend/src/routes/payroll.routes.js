@@ -1,13 +1,44 @@
 const express = require("express");
 const db = require("../config/db");
 const { authenticateToken, requireRole } = require("../middleware/auth");
+const { isNonNegativeNumber, isPositiveInteger } = require("../utils/validation");
 
 const router = express.Router();
 
 router.use(authenticateToken);
 
+router.post("/generate", requireRole("ADMIN"), (req, res) => {
+  const { employee_id, month, year } = req.body;
+
+  if (!isPositiveInteger(employee_id) || !isPositiveInteger(month) || !isPositiveInteger(year)) {
+    return res.status(400).json({ error: "employee_id, month, and year must be positive integers" });
+  }
+
+  db.query("CALL generate_payroll(?, ?, ?)", [Number(employee_id), Number(month), Number(year)], (err) => {
+    if (err) {
+      console.error(err);
+      return res.status(400).json({ error: err.sqlMessage || "Failed to generate payroll" });
+    }
+
+    return res.status(201).json({ message: "Payroll generated successfully" });
+  });
+});
+
 router.get("/payments", (req, res) => {
-  db.query("SELECT * FROM payment_record", (err, results) => {
+  const query = `
+    SELECT
+      p.payroll_id,
+      p.employee_id,
+      p.payroll_month,
+      p.payroll_year,
+      p.gross_salary,
+      pr.payment_status
+    FROM payroll_transaction p
+    JOIN payment_record pr ON pr.payroll_id = p.payroll_id
+    ORDER BY p.payroll_year DESC, p.payroll_month DESC, p.payroll_id DESC
+  `;
+
+  db.query(query, (err, results) => {
     if (err) {
       console.error(err);
       return res.status(500).json({ error: "Database error" });
@@ -30,26 +61,28 @@ router.put("/payment/:payroll_id", requireRole("ADMIN"), (req, res) => {
     return res.status(400).json({ error: "Invalid status" });
   }
 
-  const query = `
-    UPDATE payment_record
-    SET payment_status = ?
-    WHERE payroll_id = ?
-  `;
+  db.query(
+    `
+      UPDATE payment_record
+      SET payment_status = ?
+      WHERE payroll_id = ?
+    `,
+    [status, payroll_id],
+    (err, result) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: "Database error" });
+      }
 
-  db.query(query, [status, payroll_id], (err, result) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: "Database error" });
-    }
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: "Payroll not found" });
+      }
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: "Payroll not found" });
-    }
-
-    return res.json({
-      message: "Payment status updated successfully",
-    });
-  });
+      return res.json({
+        message: "Payment status updated successfully",
+      });
+    },
+  );
 });
 
 module.exports = router;
