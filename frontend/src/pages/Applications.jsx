@@ -364,13 +364,21 @@ export default function Applications() {
                     {a.job_role} {"\u2022"} {a.application_source || "Unknown source"}
                   </p>
                 </div>
-                <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  a.status === "HIRED"
+                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                    : a.status === "REJECTED"
+                      ? "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300"
+                      : a.status === "OFFERED"
+                        ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+                        : "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"
+                }`}>
                   {a.status}
                 </span>
               </div>
 
               <div className="mt-3 grid gap-2 text-sm text-slate-600 dark:text-slate-300 md:grid-cols-2 xl:grid-cols-4">
-                <p>Expected Salary: {a.expected_salary ?? "N/A"}</p>
+                <p>Expected Salary: {a.expected_salary != null ? `₹${Number(a.expected_salary).toLocaleString("en-IN")}` : "N/A"}</p>
                 <p>Notice Period: {a.notice_period ?? "N/A"} days</p>
                 <p>CGPA: {a.cgpa ?? "N/A"}</p>
                 <p>Experience: {a.experience_years ?? 0} years</p>

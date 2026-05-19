@@ -101,6 +101,11 @@ router.post("/", (req, res) => {
     (err, result) => {
       if (err) {
         console.error(err);
+
+        if (err.code === "ER_DUP_ENTRY") {
+          return res.status(409).json({ error: "A candidate with this email already exists" });
+        }
+
         return res.status(500).json({ error: "Database error" });
       }
 

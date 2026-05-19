@@ -29,7 +29,10 @@ export default function Login({ setToken }) {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-80 rounded-2xl border border-slate-200/70 bg-white/80 p-6 shadow-xl backdrop-blur-md transition-colors duration-300 dark:border-slate-700 dark:bg-slate-900/75">
+      <form
+        onSubmit={(e) => { e.preventDefault(); login(); }}
+        className="w-80 rounded-2xl border border-slate-200/70 bg-white/80 p-6 shadow-xl backdrop-blur-md transition-colors duration-300 dark:border-slate-700 dark:bg-slate-900/75"
+      >
         <h2 className="mb-4 text-xl font-semibold text-slate-900 dark:text-slate-100">
           Login
         </h2>
@@ -37,6 +40,8 @@ export default function Login({ setToken }) {
         <input
           className="mb-3 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
           placeholder="Email"
+          type="email"
+          autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
@@ -45,6 +50,7 @@ export default function Login({ setToken }) {
           type="password"
           className="mb-3 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
           placeholder="Password"
+          autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
@@ -54,13 +60,13 @@ export default function Login({ setToken }) {
         ) : null}
 
         <button
+          type="submit"
           className="w-full rounded-lg bg-blue-600 p-2 font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-300"
-          onClick={login}
           disabled={isSubmitting}
         >
           {isSubmitting ? "Signing in..." : "Login"}
         </button>
-      </div>
+      </form>
     </div>
   );
 }

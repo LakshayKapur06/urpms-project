@@ -164,46 +164,49 @@ export default function Payroll() {
           </div>
         ) : null}
 
-      {!isLoading &&
-        payments.map((p) => (
-          (() => {
-            const employee = employeeMap.get(p.employee_id);
+      {!isLoading && payments.length > 0 &&
+        payments.map((p) => {
+          const employee = employeeMap.get(p.employee_id);
 
-            return (
-              <div
-                key={p.payroll_id}
-                className="rounded-2xl border border-slate-200/70 bg-white/70 p-4 text-slate-700 shadow-sm transition-colors duration-300 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200"
-              >
-                <p className="font-medium">Payroll #{p.payroll_id}</p>
-                <div className="mt-2 grid gap-2 text-sm text-slate-500 dark:text-slate-400 md:grid-cols-2 xl:grid-cols-4">
-                  <p>
-                    Employee: #
-                    {p.employee_id} {employee ? `${employee.first_name || ""} ${employee.last_name || ""}`.trim() : "Unknown"}
-                  </p>
-                  <p>Department: {employee?.department || "N/A"}</p>
-                  <p>Month/Year: {p.payroll_month}/{p.payroll_year}</p>
-                  <p>Gross Salary: {p.gross_salary}</p>
-                </div>
-
-                <div className="mt-2 grid gap-2 text-sm text-slate-500 dark:text-slate-400 md:grid-cols-2 xl:grid-cols-4">
-                  <p>Email: {employee?.email || "N/A"}</p>
-                  <p>Joining Date: {employee?.joining_date ? new Date(employee.joining_date).toLocaleDateString() : "N/A"}</p>
-                  <p>Status: {p.payment_status}</p>
-                </div>
-
-                {p.payment_status === "PENDING" ? (
-                  <button
-                    className="mt-3 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-green-500 disabled:cursor-not-allowed disabled:bg-green-300"
-                    onClick={() => completePayment(p.payroll_id)}
-                    disabled={busyId === p.payroll_id}
-                  >
-                    {busyId === p.payroll_id ? "Updating..." : "Mark Completed"}
-                  </button>
-                ) : null}
+          return (
+            <div
+              key={p.payroll_id}
+              className="rounded-2xl border border-slate-200/70 bg-white/70 p-4 text-slate-700 shadow-sm transition-colors duration-300 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200"
+            >
+              <p className="font-medium">Payroll #{p.payroll_id}</p>
+              <div className="mt-2 grid gap-2 text-sm text-slate-500 dark:text-slate-400 md:grid-cols-2 xl:grid-cols-4">
+                <p>
+                  Employee: #
+                  {p.employee_id} {employee ? `${employee.first_name || ""} ${employee.last_name || ""}`.trim() : "Unknown"}
+                </p>
+                <p>Department: {employee?.department || "N/A"}</p>
+                <p>Month/Year: {p.payroll_month}/{p.payroll_year}</p>
+                <p>Gross Salary: ₹{Number(p.gross_salary).toLocaleString("en-IN")}</p>
               </div>
-            );
-          })()
-        ))}
+
+              <div className="mt-2 grid gap-2 text-sm text-slate-500 dark:text-slate-400 md:grid-cols-2 xl:grid-cols-4">
+                <p>Email: {employee?.email || "N/A"}</p>
+                <p>Joining Date: {employee?.joining_date ? new Date(employee.joining_date).toLocaleDateString() : "N/A"}</p>
+                <p>
+                  Status:{" "}
+                  <span className={p.payment_status === "COMPLETED" ? "font-medium text-emerald-600 dark:text-emerald-400" : "font-medium text-amber-600 dark:text-amber-400"}>
+                    {p.payment_status}
+                  </span>
+                </p>
+              </div>
+
+              {p.payment_status === "PENDING" ? (
+                <button
+                  className="mt-3 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-green-500 disabled:cursor-not-allowed disabled:bg-green-300"
+                  onClick={() => completePayment(p.payroll_id)}
+                  disabled={busyId === p.payroll_id}
+                >
+                  {busyId === p.payroll_id ? "Updating..." : "Mark Completed"}
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
     </div>
   );
 }

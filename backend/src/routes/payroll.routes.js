@@ -14,6 +14,14 @@ router.post("/generate", requireRole("ADMIN"), (req, res) => {
     return res.status(400).json({ error: "employee_id, month, and year must be positive integers" });
   }
 
+  if (Number(month) < 1 || Number(month) > 12) {
+    return res.status(400).json({ error: "month must be between 1 and 12" });
+  }
+
+  if (Number(year) < 2000 || Number(year) > 2100) {
+    return res.status(400).json({ error: "year must be between 2000 and 2100" });
+  }
+
   db.query("CALL generate_payroll(?, ?, ?)", [Number(employee_id), Number(month), Number(year)], (err) => {
     if (err) {
       console.error(err);

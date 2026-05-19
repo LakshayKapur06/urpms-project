@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-require("./config/db");
+const db = require("./config/db");
 
 const candidateRoutes = require("./routes/candidate.routes");
 const applicationRoutes = require("./routes/application.routes");
@@ -35,6 +35,28 @@ app.use("/payroll", payrollRoutes);
 app.use("/dashboard", dashboardRoutes);
 app.use("/employees", employeesRoutes);
 
-app.listen(port, () => {
+app.use((req, res) => {
+  res.status(404).json({ error: "Route not found" });
+});
+
+app.use((err, req, res, _next) => {
+  console.error("Unhandled error:", err);
+  res.status(500).json({ error: "Internal server error" });
+});
+
+const server = app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+
+function shutdown() {
+  console.log("\nShutting down gracefully...");
+  server.close(() => {
+    db.end(() => {
+      console.log("Database pool closed.");
+      process.exit(0);
+    });
+  });
+}
+
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);

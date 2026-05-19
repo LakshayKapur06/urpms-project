@@ -1,6 +1,6 @@
 import { LayoutDashboard, Users, Briefcase, Wallet } from "lucide-react";
 
-export default function Sidebar({ setPage }) {
+export default function Sidebar({ setPage, activePage }) {
   const menu = [
     { key: "dashboard", label: "Dashboard", icon: <LayoutDashboard /> },
     { key: "candidates", label: "Candidates", icon: <Users /> },
@@ -14,16 +14,24 @@ export default function Sidebar({ setPage }) {
         URPMS
       </h1>
 
-      {menu.map((item) => (
-        <div
-          key={item.key}
-          onClick={() => setPage(item.key)}
-          className="mb-2 flex cursor-pointer items-center gap-3 rounded-xl p-3 text-slate-700 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100"
-        >
-          {item.icon}
-          {item.label}
-        </div>
-      ))}
+      {menu.map((item) => {
+        const isActive = activePage === item.key;
+
+        return (
+          <div
+            key={item.key}
+            onClick={() => setPage(item.key)}
+            className={`mb-2 flex cursor-pointer items-center gap-3 rounded-xl p-3 transition ${
+              isActive
+                ? "bg-blue-50 font-semibold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"
+                : "text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+            }`}
+          >
+            {item.icon}
+            {item.label}
+          </div>
+        );
+      })}
     </div>
   );
 }

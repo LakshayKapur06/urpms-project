@@ -279,6 +279,11 @@ router.post("/", requireRole("ADMIN"), (req, res) => {
     (err, result) => {
       if (err) {
         console.error(err);
+
+        if (err.code === "ER_NO_REFERENCED_ROW_2") {
+          return res.status(400).json({ error: "Candidate not found" });
+        }
+
         return res.status(500).json({ error: "Database error" });
       }
 

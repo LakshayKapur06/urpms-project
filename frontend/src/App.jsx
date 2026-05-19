@@ -40,7 +40,7 @@ export default function App() {
 
   return (
     <div className="flex min-h-screen bg-transparent">
-      <Sidebar setPage={setPage} />
+      <Sidebar setPage={setPage} activePage={page} />
 
       <div className="flex-1 p-6 transition-colors duration-300">
         <Topbar title={pageTitles[page] || "Dashboard"} onLogout={handleLogout} />
