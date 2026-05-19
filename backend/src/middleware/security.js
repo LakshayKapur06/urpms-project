@@ -9,6 +9,15 @@ function securityHeaders(req, res, next) {
 function createRateLimiter({ windowMs, maxRequests, keyFn }) {
   const requests = new Map();
 
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, value] of requests.entries()) {
+      if (now > value.resetAt) {
+        requests.delete(key);
+      }
+    }
+  }, windowMs);
+
   return (req, res, next) => {
     const now = Date.now();
     const key = keyFn(req);
