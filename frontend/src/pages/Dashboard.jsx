@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import API from "../api/api";
 import {
   BarChart,
@@ -15,11 +15,32 @@ import {
 import KPICard from "../components/KPICard";
 import { motion } from "framer-motion";
 
+const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
+
+const tooltipStyle = {
+  backgroundColor: "#0f172a",
+  border: "1px solid #334155",
+  borderRadius: "12px",
+  color: "#f8fafc",
+};
+const tooltipLabelStyle = {
+  color: "#f8fafc",
+  fontWeight: 600,
+};
+const tooltipItemStyle = {
+  color: "#e2e8f0",
+};
+
+function formatStatusLabel(value) {
+  if (value === "INTERVIEW_SCHEDULED") return "Scheduled";
+  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+}
+
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
 
-  useEffect(() => {
+  const loadMetrics = useCallback(() => {
     API.get("/dashboard/metrics")
       .then((res) => setData(res.data))
       .catch((err) => {
@@ -27,6 +48,20 @@ export default function Dashboard() {
         setError(err.response?.data?.error || "Failed to load dashboard metrics.");
       });
   }, []);
+
+  useEffect(() => {
+    loadMetrics();
+  }, [loadMetrics]);
+
+  const { totalApplications, hired, shortlisted } = useMemo(() => {
+    if (!data) return { totalApplications: 0, hired: 0, shortlisted: 0 };
+
+    return {
+      totalApplications: data.candidatesByStage.reduce((sum, item) => sum + item.count, 0),
+      hired: data.candidatesByStage.find((s) => s.status === "HIRED")?.count || 0,
+      shortlisted: data.candidatesByStage.find((s) => s.status === "SHORTLISTED")?.count || 0,
+    };
+  }, [data]);
 
   if (error) {
     return (
@@ -37,32 +72,6 @@ export default function Dashboard() {
   }
 
   if (!data) return <div className="text-slate-700 dark:text-slate-200">Loading...</div>;
-
-  const totalApplications = data.candidatesByStage.reduce(
-    (sum, item) => sum + item.count,
-    0,
-  );
-
-  const hired =
-    data.candidatesByStage.find((s) => s.status === "HIRED")?.count || 0;
-
-  const shortlisted =
-    data.candidatesByStage.find((s) => s.status === "SHORTLISTED")?.count || 0;
-
-  const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444"];
-  const tooltipStyle = {
-    backgroundColor: "#0f172a",
-    border: "1px solid #334155",
-    borderRadius: "12px",
-    color: "#f8fafc",
-  };
-  const tooltipLabelStyle = {
-    color: "#f8fafc",
-    fontWeight: 600,
-  };
-  const tooltipItemStyle = {
-    color: "#e2e8f0",
-  };
 
   return (
     <div className="space-y-8">
@@ -90,13 +99,10 @@ export default function Dashboard() {
 
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={data.candidatesByStage}>
-              <XAxis 
-                dataKey="status" 
-                stroke="#94a3b8" 
-                tickFormatter={(value) => {
-                  if (value === 'INTERVIEW_SCHEDULED') return 'Scheduled';
-                  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
-                }} 
+              <XAxis
+                dataKey="status"
+                stroke="#94a3b8"
+                tickFormatter={formatStatusLabel}
               />
               <YAxis stroke="#94a3b8" allowDecimals={false} />
               <Tooltip
@@ -104,10 +110,7 @@ export default function Dashboard() {
                 labelStyle={tooltipLabelStyle}
                 itemStyle={tooltipItemStyle}
                 cursor={{ fill: "rgba(59, 130, 246, 0.14)" }}
-                labelFormatter={(value) => {
-                  if (value === 'INTERVIEW_SCHEDULED') return 'Scheduled';
-                  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
-                }}
+                labelFormatter={formatStatusLabel}
               />
               <Bar dataKey="count" fill="#3b82f6" radius={[6, 6, 0, 0]} />
             </BarChart>

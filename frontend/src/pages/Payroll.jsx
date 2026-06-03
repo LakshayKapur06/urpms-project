@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import API from "../api/api";
 
 const initialForm = {
@@ -16,11 +16,12 @@ export default function Payroll() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [busyId, setBusyId] = useState(null);
 
-  const employeeMap = new Map(
-    employees.map((employee) => [employee.employee_id, employee]),
+  const employeeMap = useMemo(
+    () => new Map(employees.map((employee) => [employee.employee_id, employee])),
+    [employees],
   );
 
-  const loadPayrollData = async () => {
+  const loadPayrollData = useCallback(async () => {
     try {
       setIsLoading(true);
       const [paymentsRes, employeesRes] = await Promise.all([
@@ -37,11 +38,11 @@ export default function Payroll() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadPayrollData();
-  }, []);
+  }, [loadPayrollData]);
 
   const generatePayroll = async (event) => {
     event.preventDefault();
@@ -98,6 +99,7 @@ export default function Payroll() {
       >
         <div className="grid gap-4 md:grid-cols-3">
           <select
+            id="select-employee"
             className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             value={form.employee_id}
             onChange={(e) => setForm((current) => ({ ...current, employee_id: e.target.value }))}
@@ -114,6 +116,7 @@ export default function Payroll() {
             type="number"
             min="1"
             max="12"
+            id="input-payroll-month"
             className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             placeholder="Payroll Month"
             value={form.month}
@@ -123,6 +126,7 @@ export default function Payroll() {
           <input
             type="number"
             min="2024"
+            id="input-payroll-year"
             className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             placeholder="Payroll Year"
             value={form.year}
@@ -132,6 +136,7 @@ export default function Payroll() {
 
         <button
           type="submit"
+          id="btn-generate-payroll"
           disabled={isSubmitting}
           className="mt-4 rounded-xl bg-blue-600 px-4 py-2 font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-300"
         >

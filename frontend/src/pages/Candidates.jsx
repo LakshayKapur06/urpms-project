@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import API from "../api/api";
 import AddCandidate from "../components/AddCandidate";
 
@@ -19,7 +19,7 @@ export default function Candidates() {
   const [pipelineForm, setPipelineForm] = useState(initialPipelineForm);
   const [isSubmittingPipeline, setIsSubmittingPipeline] = useState(false);
 
-  const loadCandidates = async (appliedFilters = filters) => {
+  const loadCandidates = useCallback(async (appliedFilters = filters) => {
     try {
       setIsLoading(true);
       setError("");
@@ -36,11 +36,12 @@ export default function Candidates() {
     } finally {
       setIsLoading(false);
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     loadCandidates();
-  }, []);
+  }, [loadCandidates]);
 
   const createApplication = async (event) => {
     event.preventDefault();
@@ -83,6 +84,7 @@ export default function Candidates() {
             step="0.01"
             min="0"
             max="10"
+            id="filter-min-cgpa"
             className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             placeholder="Min CGPA"
             value={filters.minCgpa}
@@ -91,6 +93,7 @@ export default function Candidates() {
           <input
             type="number"
             min="0"
+            id="filter-min-experience"
             className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             placeholder="Min Experience"
             value={filters.minExperience}
@@ -100,12 +103,14 @@ export default function Candidates() {
 
         <div className="mt-4 flex gap-3">
           <button
+            id="btn-apply-filters"
             className="rounded-xl bg-blue-600 px-4 py-2 font-medium text-white transition hover:bg-blue-500"
             onClick={() => loadCandidates()}
           >
             Apply Filters
           </button>
           <button
+            id="btn-reset-filters"
             className="rounded-xl border border-slate-300 px-4 py-2 font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
             onClick={() => {
               const reset = { minCgpa: "", minExperience: "" };

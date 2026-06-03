@@ -20,19 +20,30 @@ const validTransitions = {
   OFFERED: ["HIRED", "REJECTED"],
 };
 
-function getApplicationById(application_id, callback) {
-  db.query(
+async function getApplicationById(application_id) {
+  const [rows] = await db.query(
     "SELECT application_id, status FROM application WHERE application_id = ?",
     [application_id],
-    (err, result) => {
-      if (err) return callback(err);
-      if (!result.length) return callback(null, null);
-      return callback(null, result[0]);
-    },
   );
+  return rows[0] || null;
 }
 
-function getApplicationDetailsById(application_id, callback) {
+function latestFeedbackJoin() {
+  return `
+    LEFT JOIN (
+      SELECT f1.*
+      FROM interview_feedback f1
+      INNER JOIN (
+        SELECT application_id, MAX(feedback_id) AS latest_feedback_id
+        FROM interview_feedback
+        GROUP BY application_id
+      ) latest
+        ON latest.latest_feedback_id = f1.feedback_id
+    ) feedback ON feedback.application_id = a.application_id
+  `;
+}
+
+async function getApplicationDetailsById(application_id) {
   const query = `
     SELECT
       a.application_id,
@@ -64,10 +75,8 @@ function getApplicationDetailsById(application_id, callback) {
     LIMIT 1
   `;
 
-  db.query(query, [application_id], (err, rows) => {
-    if (err) return callback(err);
-    return callback(null, rows[0] || null);
-  });
+  const [rows] = await db.query(query, [application_id]);
+  return rows[0] || null;
 }
 
 function formatInterviewDateTime(value) {
@@ -78,22 +87,8 @@ function formatInterviewDateTime(value) {
   return value.trim().replace("T", " ");
 }
 
-function latestFeedbackJoin() {
-  return `
-    LEFT JOIN (
-      SELECT f1.*
-      FROM interview_feedback f1
-      INNER JOIN (
-        SELECT application_id, MAX(feedback_id) AS latest_feedback_id
-        FROM interview_feedback
-        GROUP BY application_id
-      ) latest
-        ON latest.latest_feedback_id = f1.feedback_id
-    ) feedback ON feedback.application_id = a.application_id
-  `;
-}
-
-router.get("/", (req, res) => {
+// GET all applications (with optional minScore filter)
+router.get("/", async (req, res) => {
   const { minScore } = req.query;
   const params = [];
   let scoreFilter = "";
@@ -106,48 +101,48 @@ router.get("/", (req, res) => {
     params.push(Number(minScore));
   }
 
-  const query = `
-    SELECT
-      a.application_id,
-      a.candidate_id,
-      a.job_role,
-      a.expected_salary,
-      a.notice_period,
-      a.application_source,
-      a.status,
-      a.applied_at,
-      a.interview_date,
-      a.interviewer_name,
-      c.first_name,
-      c.last_name,
-      c.email,
-      c.phone,
-      c.degree,
-      c.specialization,
-      c.cgpa,
-      c.experience_years,
-      feedback.technical_score,
-      feedback.communication_score,
-      feedback.overall_score,
-      feedback.remarks
-    FROM application a
-    JOIN candidate c ON c.candidate_id = a.candidate_id
-    ${latestFeedbackJoin()}
-    ${scoreFilter}
-    ORDER BY a.applied_at DESC, a.application_id DESC
-  `;
+  try {
+    const query = `
+      SELECT
+        a.application_id,
+        a.candidate_id,
+        a.job_role,
+        a.expected_salary,
+        a.notice_period,
+        a.application_source,
+        a.status,
+        a.applied_at,
+        a.interview_date,
+        a.interviewer_name,
+        c.first_name,
+        c.last_name,
+        c.email,
+        c.phone,
+        c.degree,
+        c.specialization,
+        c.cgpa,
+        c.experience_years,
+        feedback.technical_score,
+        feedback.communication_score,
+        feedback.overall_score,
+        feedback.remarks
+      FROM application a
+      JOIN candidate c ON c.candidate_id = a.candidate_id
+      ${latestFeedbackJoin()}
+      ${scoreFilter}
+      ORDER BY a.applied_at DESC, a.application_id DESC
+    `;
 
-  db.query(query, params, (err, results) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: "Database error" });
-    }
-
+    const [results] = await db.query(query, params);
     return res.json(results);
-  });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Database error" });
+  }
 });
 
-router.get("/filter", (req, res) => {
+// GET filtered applications via stored procedure
+router.get("/filter", async (req, res) => {
   const { minCgpa = 0, minExp = 0, maxSalary = 999999999, minScore } = req.query;
 
   if (!isNonNegativeNumber(minCgpa) || !isNonNegativeNumber(minExp) || !isNonNegativeNumber(maxSalary)) {
@@ -158,66 +153,62 @@ router.get("/filter", (req, res) => {
     return res.status(400).json({ error: "minScore must be a non-negative number" });
   }
 
-  db.query(
-    "CALL filter_candidates(?, ?, ?)",
-    [Number(minCgpa), Number(minExp), Number(maxSalary)],
-    (err, results) => {
-      if (err) {
-        console.error(err);
-        return res.status(500).json({ error: "Failed to filter applications" });
-      }
+  try {
+    const [procResults] = await db.query(
+      "CALL filter_candidates(?, ?, ?)",
+      [Number(minCgpa), Number(minExp), Number(maxSalary)],
+    );
 
-      const filtered = results[0] || [];
+    const filtered = procResults[0] || [];
 
-      if (!filtered.length) {
-        return res.json([]);
-      }
+    if (!filtered.length) {
+      return res.json([]);
+    }
 
-      const applicationIds = filtered.map((row) => row.application_id);
-      const placeholders = applicationIds.map(() => "?").join(", ");
-      const feedbackQuery = `
-        SELECT
-          f1.application_id,
-          f1.technical_score,
-          f1.communication_score,
-          f1.overall_score,
-          f1.remarks
-        FROM interview_feedback f1
-        INNER JOIN (
-          SELECT application_id, MAX(feedback_id) AS latest_feedback_id
-          FROM interview_feedback
-          WHERE application_id IN (${placeholders})
-          GROUP BY application_id
-        ) latest
-          ON latest.latest_feedback_id = f1.feedback_id
-      `;
+    const applicationIds = filtered.map((row) => row.application_id);
+    const placeholders = applicationIds.map(() => "?").join(", ");
 
-      db.query(feedbackQuery, applicationIds, (feedbackErr, feedbackRows) => {
-        if (feedbackErr) {
-          console.error(feedbackErr);
-          return res.status(500).json({ error: "Failed to load interview feedback" });
-        }
+    const feedbackQuery = `
+      SELECT
+        f1.application_id,
+        f1.technical_score,
+        f1.communication_score,
+        f1.overall_score,
+        f1.remarks
+      FROM interview_feedback f1
+      INNER JOIN (
+        SELECT application_id, MAX(feedback_id) AS latest_feedback_id
+        FROM interview_feedback
+        WHERE application_id IN (${placeholders})
+        GROUP BY application_id
+      ) latest
+        ON latest.latest_feedback_id = f1.feedback_id
+    `;
 
-        const feedbackMap = new Map(feedbackRows.map((row) => [row.application_id, row]));
-        const merged = filtered.map((row) => ({
-          ...row,
-          ...(feedbackMap.get(row.application_id) || {}),
-        }));
+    const [feedbackRows] = await db.query(feedbackQuery, applicationIds);
 
-        const scoreThreshold =
-          minScore === undefined || minScore === "" ? null : Number(minScore);
+    const feedbackMap = new Map(feedbackRows.map((row) => [row.application_id, row]));
+    const merged = filtered.map((row) => ({
+      ...row,
+      ...(feedbackMap.get(row.application_id) || {}),
+    }));
 
-        return res.json(
-          scoreThreshold === null
-            ? merged
-            : merged.filter((row) => Number(row.overall_score || 0) >= scoreThreshold),
-        );
-      });
-    },
-  );
+    const scoreThreshold =
+      minScore === undefined || minScore === "" ? null : Number(minScore);
+
+    return res.json(
+      scoreThreshold === null
+        ? merged
+        : merged.filter((row) => Number(row.overall_score || 0) >= scoreThreshold),
+    );
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Failed to filter applications" });
+  }
 });
 
-router.post("/", requireRole("ADMIN"), (req, res) => {
+// POST create application
+router.post("/", requireRole("ADMIN"), async (req, res) => {
   const {
     candidate_id,
     job_role,
@@ -252,20 +243,19 @@ router.post("/", requireRole("ADMIN"), (req, res) => {
     return res.status(400).json({ error: "notice_period must be a non-negative number" });
   }
 
-  const query = `
-    INSERT INTO application (
-      candidate_id,
-      job_role,
-      expected_salary,
-      notice_period,
-      application_source
-    )
-    VALUES (?, ?, ?, ?, ?)
-  `;
+  try {
+    const query = `
+      INSERT INTO application (
+        candidate_id,
+        job_role,
+        expected_salary,
+        notice_period,
+        application_source
+      )
+      VALUES (?, ?, ?, ?, ?)
+    `;
 
-  db.query(
-    query,
-    [
+    const [result] = await db.query(query, [
       Number(candidate_id),
       job_role.trim(),
       expected_salary === "" || expected_salary === undefined || expected_salary === null
@@ -275,27 +265,25 @@ router.post("/", requireRole("ADMIN"), (req, res) => {
         ? null
         : Number(notice_period),
       application_source?.trim() || null,
-    ],
-    (err, result) => {
-      if (err) {
-        console.error(err);
+    ]);
 
-        if (err.code === "ER_NO_REFERENCED_ROW_2") {
-          return res.status(400).json({ error: "Candidate not found" });
-        }
+    return res.status(201).json({
+      message: "Application created",
+      application_id: result.insertId,
+    });
+  } catch (err) {
+    console.error(err);
 
-        return res.status(500).json({ error: "Database error" });
-      }
+    if (err.code === "ER_NO_REFERENCED_ROW_2") {
+      return res.status(400).json({ error: "Candidate not found" });
+    }
 
-      return res.status(201).json({
-        message: "Application created",
-        application_id: result.insertId,
-      });
-    },
-  );
+    return res.status(500).json({ error: "Database error" });
+  }
 });
 
-router.put("/:id/status", requireRole("ADMIN"), (req, res) => {
+// PUT update status
+router.put("/:id/status", requireRole("ADMIN"), async (req, res) => {
   const application_id = Number(req.params.id);
   const { new_status } = req.body;
 
@@ -309,11 +297,8 @@ router.put("/:id/status", requireRole("ADMIN"), (req, res) => {
 
   const nextStatus = new_status.trim().toUpperCase();
 
-  getApplicationById(application_id, (err, application) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: "DB error" });
-    }
+  try {
+    const application = await getApplicationById(application_id);
 
     if (!application) {
       return res.status(404).json({ error: "Application not found" });
@@ -325,33 +310,32 @@ router.put("/:id/status", requireRole("ADMIN"), (req, res) => {
       return res.status(400).json({ error: "Invalid status transition" });
     }
 
-    db.query(
+    await db.query(
       "UPDATE application SET status = ? WHERE application_id = ?",
       [nextStatus, application_id],
-      (updateErr) => {
-        if (updateErr) {
-          console.error(updateErr);
-          return res.status(500).json({ error: "Update failed" });
-        }
-
-        return getApplicationDetailsById(application_id, (fetchErr, updatedApplication) => {
-          if (fetchErr) {
-            console.error(fetchErr);
-          }
-
-          return res.json({
-            message: "Status updated",
-            from: current_status,
-            to: nextStatus,
-            application: updatedApplication,
-          });
-        });
-      },
     );
-  });
+
+    let updatedApplication = null;
+    try {
+      updatedApplication = await getApplicationDetailsById(application_id);
+    } catch (fetchErr) {
+      console.error(fetchErr);
+    }
+
+    return res.json({
+      message: "Status updated",
+      from: current_status,
+      to: nextStatus,
+      application: updatedApplication,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Update failed" });
+  }
 });
 
-router.put("/:id/schedule-interview", requireRole("ADMIN"), (req, res) => {
+// PUT schedule interview
+router.put("/:id/schedule-interview", requireRole("ADMIN"), async (req, res) => {
   const application_id = Number(req.params.id);
   const { interview_date, interviewer_name } = req.body;
 
@@ -365,11 +349,8 @@ router.put("/:id/schedule-interview", requireRole("ADMIN"), (req, res) => {
 
   const normalizedInterviewDate = formatInterviewDateTime(interview_date);
 
-  getApplicationById(application_id, (err, application) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: "DB error" });
-    }
+  try {
+    const application = await getApplicationById(application_id);
 
     if (!application) {
       return res.status(404).json({ error: "Application not found" });
@@ -381,7 +362,7 @@ router.put("/:id/schedule-interview", requireRole("ADMIN"), (req, res) => {
       return res.status(400).json({ error: "Only shortlisted applications can be scheduled for interview" });
     }
 
-    db.query(
+    await db.query(
       `
         UPDATE application
         SET status = 'INTERVIEW_SCHEDULED',
@@ -390,41 +371,37 @@ router.put("/:id/schedule-interview", requireRole("ADMIN"), (req, res) => {
         WHERE application_id = ?
       `,
       [normalizedInterviewDate, interviewer_name.trim(), application_id],
-      (updateErr) => {
-        if (updateErr) {
-          console.error(updateErr);
-          return res.status(500).json({ error: "Failed to schedule interview" });
-        }
-
-        return getApplicationDetailsById(application_id, (fetchErr, updatedApplication) => {
-          if (fetchErr) {
-            console.error(fetchErr);
-          }
-
-          return res.json({
-            message: "Interview scheduled successfully",
-            from: current_status,
-            to: "INTERVIEW_SCHEDULED",
-            application: updatedApplication,
-          });
-        });
-      },
     );
-  });
+
+    let updatedApplication = null;
+    try {
+      updatedApplication = await getApplicationDetailsById(application_id);
+    } catch (fetchErr) {
+      console.error(fetchErr);
+    }
+
+    return res.json({
+      message: "Interview scheduled successfully",
+      from: current_status,
+      to: "INTERVIEW_SCHEDULED",
+      application: updatedApplication,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Failed to schedule interview" });
+  }
 });
 
-router.put("/:id/interviewed", requireRole("ADMIN"), (req, res) => {
+// PUT mark interviewed
+router.put("/:id/interviewed", requireRole("ADMIN"), async (req, res) => {
   const application_id = Number(req.params.id);
 
   if (!isPositiveInteger(application_id)) {
     return res.status(400).json({ error: "Invalid application id" });
   }
 
-  getApplicationById(application_id, (err, application) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: "DB error" });
-    }
+  try {
+    const application = await getApplicationById(application_id);
 
     if (!application) {
       return res.status(404).json({ error: "Application not found" });
@@ -436,33 +413,32 @@ router.put("/:id/interviewed", requireRole("ADMIN"), (req, res) => {
       return res.status(400).json({ error: "Only scheduled interviews can be marked as interviewed" });
     }
 
-    db.query(
+    await db.query(
       "UPDATE application SET status = 'INTERVIEWED' WHERE application_id = ?",
       [application_id],
-      (updateErr) => {
-        if (updateErr) {
-          console.error(updateErr);
-          return res.status(500).json({ error: "Failed to mark application as interviewed" });
-        }
-
-        return getApplicationDetailsById(application_id, (fetchErr, updatedApplication) => {
-          if (fetchErr) {
-            console.error(fetchErr);
-          }
-
-          return res.json({
-            message: "Application marked as interviewed",
-            from: current_status,
-            to: "INTERVIEWED",
-            application: updatedApplication,
-          });
-        });
-      },
     );
-  });
+
+    let updatedApplication = null;
+    try {
+      updatedApplication = await getApplicationDetailsById(application_id);
+    } catch (fetchErr) {
+      console.error(fetchErr);
+    }
+
+    return res.json({
+      message: "Application marked as interviewed",
+      from: current_status,
+      to: "INTERVIEWED",
+      application: updatedApplication,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Failed to mark application as interviewed" });
+  }
 });
 
-router.post("/:id/feedback", requireRole("ADMIN"), (req, res) => {
+// POST feedback
+router.post("/:id/feedback", requireRole("ADMIN"), async (req, res) => {
   const application_id = Number(req.params.id);
   const { technical_score, communication_score, remarks } = req.body;
 
@@ -474,61 +450,62 @@ router.post("/:id/feedback", requireRole("ADMIN"), (req, res) => {
     return res.status(400).json({ error: "technical_score and communication_score must be between 0 and 100" });
   }
 
-  db.query(
-    `
-      INSERT INTO interview_feedback (
+  try {
+    const [insertResult] = await db.query(
+      `
+        INSERT INTO interview_feedback (
+          application_id,
+          technical_score,
+          communication_score,
+          remarks
+        )
+        VALUES (?, ?, ?, ?)
+      `,
+      [
         application_id,
-        technical_score,
-        communication_score,
-        remarks
-      )
-      VALUES (?, ?, ?, ?)
-    `,
-    [
-      application_id,
-      Number(technical_score),
-      Number(communication_score),
-      remarks?.trim() || null,
-    ],
-    (insertErr, result) => {
-      if (insertErr) {
-        console.error(insertErr);
-        return res.status(400).json({
-          error: insertErr.sqlMessage || "Failed to save interview feedback",
-        });
-      }
+        Number(technical_score),
+        Number(communication_score),
+        remarks?.trim() || null,
+      ],
+    );
 
-      db.query(
+    let feedback = null;
+    try {
+      const [feedbackRows] = await db.query(
         `
           SELECT feedback_id, application_id, technical_score, communication_score, overall_score, remarks
           FROM interview_feedback
           WHERE feedback_id = ?
         `,
-        [result.insertId],
-        (fetchErr, rows) => {
-          if (fetchErr) {
-            console.error(fetchErr);
-            return res.status(201).json({ message: "Feedback saved successfully" });
-          }
-
-          return getApplicationDetailsById(application_id, (applicationErr, applicationDetails) => {
-            if (applicationErr) {
-              console.error(applicationErr);
-            }
-
-            return res.status(201).json({
-              message: "Feedback saved successfully",
-              feedback: rows[0],
-              application: applicationDetails,
-            });
-          });
-        },
+        [insertResult.insertId],
       );
-    },
-  );
+      feedback = feedbackRows[0] || null;
+    } catch (fetchErr) {
+      console.error(fetchErr);
+    }
+
+    let applicationDetails = null;
+    try {
+      applicationDetails = await getApplicationDetailsById(application_id);
+    } catch (appErr) {
+      console.error(appErr);
+    }
+
+    return res.status(201).json({
+      message: "Feedback saved successfully",
+      feedback,
+      application: applicationDetails,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(400).json({
+      error: err.sqlMessage || "Failed to save interview feedback",
+    });
+  }
 });
 
-router.post("/:id/hire", requireRole("ADMIN"), (req, res) => {
+// POST hire
+router.post("/:id/hire", requireRole("ADMIN"), async (req, res) => {
   const application_id = Number(req.params.id);
   const { department, base_salary, bonus_percentage } = req.body;
 
@@ -544,11 +521,8 @@ router.post("/:id/hire", requireRole("ADMIN"), (req, res) => {
     return res.status(400).json({ error: "base_salary and bonus_percentage must be non-negative numbers" });
   }
 
-  getApplicationById(application_id, (err, application) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: "DB error" });
-    }
+  try {
+    const application = await getApplicationById(application_id);
 
     if (!application) {
       return res.status(404).json({ error: "Application not found" });
@@ -560,77 +534,59 @@ router.post("/:id/hire", requireRole("ADMIN"), (req, res) => {
       return res.status(400).json({ error: "The application must be OFFERED before it can be hired" });
     }
 
-    db.query(
+    await db.query(
       "CALL hire_candidate(?, ?, ?, ?)",
       [application_id, department.trim(), Number(base_salary), Number(bonus_percentage)],
-      (hireErr) => {
-        if (hireErr) {
-          console.error(hireErr);
-          return res.status(400).json({ error: hireErr.sqlMessage || "Hire operation failed" });
-        }
-
-        return getApplicationDetailsById(application_id, (fetchErr, updatedApplication) => {
-          if (fetchErr) {
-            console.error(fetchErr);
-          }
-
-          return res.json({
-            message: "Candidate hired successfully",
-            application_id,
-            status: "HIRED",
-            application: updatedApplication,
-          });
-        });
-      },
     );
-  });
+
+    let updatedApplication = null;
+    try {
+      updatedApplication = await getApplicationDetailsById(application_id);
+    } catch (fetchErr) {
+      console.error(fetchErr);
+    }
+
+    return res.json({
+      message: "Candidate hired successfully",
+      application_id,
+      status: "HIRED",
+      application: updatedApplication,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(400).json({ error: err.sqlMessage || "Hire operation failed" });
+  }
 });
 
-router.delete("/:id", requireRole("ADMIN"), (req, res) => {
+// DELETE application
+router.delete("/:id", requireRole("ADMIN"), async (req, res) => {
   const application_id = Number(req.params.id);
 
   if (!isPositiveInteger(application_id)) {
     return res.status(400).json({ error: "Invalid application id" });
   }
 
-  db.query(
-    "DELETE FROM interview_feedback WHERE application_id = ?",
-    [application_id],
-    (feedbackErr) => {
-      if (feedbackErr) {
-        console.error(feedbackErr);
-        return res.status(500).json({ error: "Failed to remove application feedback" });
-      }
+  try {
+    // Delete dependent records in parallel since they're independent
+    await Promise.all([
+      db.query("DELETE FROM interview_feedback WHERE application_id = ?", [application_id]),
+      db.query("DELETE FROM status_history WHERE application_id = ?", [application_id]),
+    ]);
 
-      db.query(
-        "DELETE FROM status_history WHERE application_id = ?",
-        [application_id],
-        (historyErr) => {
-          if (historyErr) {
-            console.error(historyErr);
-            return res.status(500).json({ error: "Failed to remove application history" });
-          }
+    const [result] = await db.query(
+      "DELETE FROM application WHERE application_id = ?",
+      [application_id],
+    );
 
-          db.query(
-            "DELETE FROM application WHERE application_id = ?",
-            [application_id],
-            (deleteErr, result) => {
-              if (deleteErr) {
-                console.error(deleteErr);
-                return res.status(400).json({ error: deleteErr.sqlMessage || "Failed to remove application" });
-              }
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Application not found" });
+    }
 
-              if (result.affectedRows === 0) {
-                return res.status(404).json({ error: "Application not found" });
-              }
-
-              return res.json({ message: "Application removed from pipeline" });
-            },
-          );
-        },
-      );
-    },
-  );
+    return res.json({ message: "Application removed from pipeline" });
+  } catch (err) {
+    console.error(err);
+    return res.status(400).json({ error: err.sqlMessage || "Failed to remove application" });
+  }
 });
 
 module.exports = router;

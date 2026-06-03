@@ -13,7 +13,7 @@ const router = express.Router();
 
 router.use(authenticateToken);
 
-router.post("/", (req, res) => {
+router.post("/", async (req, res) => {
   const {
     first_name,
     last_name,
@@ -66,25 +66,24 @@ router.post("/", (req, res) => {
     return res.status(400).json({ error: "Experience years must be a non-negative number" });
   }
 
-  const query = `
-    INSERT INTO candidate (
-      first_name,
-      last_name,
-      email,
-      phone,
-      college_name,
-      degree,
-      specialization,
-      cgpa,
-      experience_years,
-      skills
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `;
+  try {
+    const query = `
+      INSERT INTO candidate (
+        first_name,
+        last_name,
+        email,
+        phone,
+        college_name,
+        degree,
+        specialization,
+        cgpa,
+        experience_years,
+        skills
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
 
-  db.query(
-    query,
-    [
+    const [result] = await db.query(query, [
       first_name.trim(),
       last_name.trim(),
       email.trim().toLowerCase(),
@@ -97,27 +96,24 @@ router.post("/", (req, res) => {
         ? 0
         : Number(experience_years),
       skills?.trim() || null,
-    ],
-    (err, result) => {
-      if (err) {
-        console.error(err);
+    ]);
 
-        if (err.code === "ER_DUP_ENTRY") {
-          return res.status(409).json({ error: "A candidate with this email already exists" });
-        }
+    return res.status(201).json({
+      message: "Candidate added successfully",
+      candidate_id: result.insertId,
+    });
+  } catch (err) {
+    console.error(err);
 
-        return res.status(500).json({ error: "Database error" });
-      }
+    if (err.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({ error: "A candidate with this email already exists" });
+    }
 
-      return res.status(201).json({
-        message: "Candidate added successfully",
-        candidate_id: result.insertId,
-      });
-    },
-  );
+    return res.status(500).json({ error: "Database error" });
+  }
 });
 
-router.get("/", (req, res) => {
+router.get("/", async (req, res) => {
   const { minCgpa, minExperience } = req.query;
   const where = [];
   const params = [];
@@ -138,33 +134,32 @@ router.get("/", (req, res) => {
     params.push(Number(minExperience));
   }
 
-  const query = `
-    SELECT
-      candidate_id,
-      first_name,
-      last_name,
-      email,
-      phone,
-      college_name,
-      degree,
-      specialization,
-      cgpa,
-      experience_years,
-      skills,
-      created_at
-    FROM candidate
-    ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
-    ORDER BY created_at DESC, candidate_id DESC
-  `;
+  try {
+    const query = `
+      SELECT
+        candidate_id,
+        first_name,
+        last_name,
+        email,
+        phone,
+        college_name,
+        degree,
+        specialization,
+        cgpa,
+        experience_years,
+        skills,
+        created_at
+      FROM candidate
+      ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+      ORDER BY created_at DESC, candidate_id DESC
+    `;
 
-  db.query(query, params, (err, results) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: "Database error" });
-    }
-
+    const [results] = await db.query(query, params);
     return res.json(results);
-  });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Database error" });
+  }
 });
 
 module.exports = router;

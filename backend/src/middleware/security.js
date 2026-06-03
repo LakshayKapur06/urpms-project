@@ -14,7 +14,7 @@ function securityHeaders(req, res, next) {
 function createRateLimiter({ windowMs, maxRequests, keyFn }) {
   const requests = new Map();
 
-  setInterval(() => {
+  const cleanupTimer = setInterval(() => {
     const now = Date.now();
     for (const [key, value] of requests.entries()) {
       if (now > value.resetAt) {
@@ -22,6 +22,9 @@ function createRateLimiter({ windowMs, maxRequests, keyFn }) {
       }
     }
   }, windowMs);
+
+  // Allow Node.js to exit even if this timer is still running
+  cleanupTimer.unref();
 
   return (req, res, next) => {
     const now = Date.now();

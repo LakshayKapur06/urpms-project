@@ -29,7 +29,7 @@ function signToken(user) {
 router.post(
   "/register",
   attachUser,
-  (req, res, next) => {
+  async (req, res, next) => {
     const { email, password } = req.body;
 
     if (!isValidEmail(email)) {
@@ -40,12 +40,8 @@ router.post(
       return res.status(400).json({ error: "Password must be at least 8 characters long" });
     }
 
-    db.query("SELECT COUNT(*) AS userCount FROM users", async (countErr, countResults) => {
-      if (countErr) {
-        console.error(countErr);
-        return res.status(500).json({ error: "Failed to check registration state" });
-      }
-
+    try {
+      const [countResults] = await db.query("SELECT COUNT(*) AS userCount FROM users");
       const userCount = countResults[0]?.userCount || 0;
 
       if (userCount > 0) {
@@ -53,7 +49,10 @@ router.post(
       }
 
       return next();
-    });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Failed to check registration state" });
+    }
   },
   async (req, res) => {
     const { email, password } = req.body;
@@ -62,31 +61,25 @@ router.post(
     try {
       const hash = await bcrypt.hash(password, 12);
 
-      db.query(
+      await db.query(
         "INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)",
         [normalizedEmail, hash, "ADMIN"],
-        (err) => {
-          if (err) {
-            console.error(err);
-
-            if (err.code === "ER_DUP_ENTRY") {
-              return res.status(409).json({ error: "User already exists" });
-            }
-
-            return res.status(500).json({ error: "Unable to create user" });
-          }
-
-          return res.status(201).json({ message: "User created" });
-        },
       );
-    } catch (error) {
-      console.error(error);
+
+      return res.status(201).json({ message: "User created" });
+    } catch (err) {
+      console.error(err);
+
+      if (err.code === "ER_DUP_ENTRY") {
+        return res.status(409).json({ error: "User already exists" });
+      }
+
       return res.status(500).json({ error: "Unable to create user" });
     }
   },
 );
 
-router.post("/login", loginLimiter, (req, res) => {
+router.post("/login", loginLimiter, async (req, res) => {
   const { email, password } = req.body;
   const normalizedEmail = String(email || "").trim().toLowerCase();
 
@@ -94,43 +87,36 @@ router.post("/login", loginLimiter, (req, res) => {
     return res.status(400).json({ error: "Email and password are required" });
   }
 
-  db.query(
-    "SELECT user_id, email, password_hash, role FROM users WHERE email = ?",
-    [normalizedEmail],
-    async (err, results) => {
-      if (err) {
-        console.error(err);
-        return res.status(500).json({ error: "Login failed" });
-      }
+  try {
+    const [results] = await db.query(
+      "SELECT user_id, email, password_hash, role FROM users WHERE email = ?",
+      [normalizedEmail],
+    );
 
-      if (!results || results.length === 0) {
-        return res.status(401).json({ error: "Invalid credentials" });
-      }
+    if (!results || results.length === 0) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
 
-      const user = results[0];
+    const user = results[0];
+    const valid = await bcrypt.compare(password, user.password_hash);
 
-      try {
-        const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
 
-        if (!valid) {
-          return res.status(401).json({ error: "Invalid credentials" });
-        }
-
-        const token = signToken(user);
-        return res.json({
-          token,
-          user: {
-            user_id: user.user_id,
-            email: user.email,
-            role: user.role,
-          },
-        });
-      } catch (compareError) {
-        console.error(compareError);
-        return res.status(500).json({ error: "Login failed" });
-      }
-    },
-  );
+    const token = signToken(user);
+    return res.json({
+      token,
+      user: {
+        user_id: user.user_id,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Login failed" });
+  }
 });
 
 module.exports = router;

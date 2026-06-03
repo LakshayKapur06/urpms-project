@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import API from "../api/api";
 
 const initialFilters = {
@@ -50,7 +50,7 @@ export default function Applications() {
   const [feedbackForm, setFeedbackForm] = useState(initialFeedbackForm);
   const [hireForm, setHireForm] = useState(initialHireForm);
 
-  const loadApplications = async (scoreFilter = "") => {
+  const loadApplications = useCallback(async (scoreFilter = "") => {
     try {
       setIsLoading(true);
       setNotice(null);
@@ -69,11 +69,11 @@ export default function Applications() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadApplications();
-  }, []);
+  }, [loadApplications]);
 
   const closeInlineForms = (applicationId) => {
     if (scheduleForm.application_id === applicationId) {
@@ -266,6 +266,7 @@ export default function Applications() {
             step="0.01"
             min="0"
             max="10"
+            id="filter-app-min-cgpa"
             className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             placeholder="Min CGPA"
             value={filters.minCgpa}
@@ -274,6 +275,7 @@ export default function Applications() {
           <input
             type="number"
             min="0"
+            id="filter-app-min-exp"
             className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             placeholder="Min Experience"
             value={filters.minExp}
@@ -282,6 +284,7 @@ export default function Applications() {
           <input
             type="number"
             min="0"
+            id="filter-app-max-salary"
             className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             placeholder="Max Salary"
             value={filters.maxSalary}
@@ -291,6 +294,7 @@ export default function Applications() {
             type="number"
             min="0"
             max="100"
+            id="filter-app-min-score"
             className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             placeholder="Min Interview Score"
             value={filters.minScore}
@@ -300,6 +304,7 @@ export default function Applications() {
 
         <div className="mt-4 flex flex-wrap gap-3">
           <button
+            id="btn-apply-app-filters"
             className="rounded-xl bg-blue-600 px-4 py-2 font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-300"
             onClick={applyFilters}
             disabled={isFiltering}
@@ -307,6 +312,7 @@ export default function Applications() {
             {isFiltering ? "Applying..." : "Apply Filters"}
           </button>
           <button
+            id="btn-reset-app-filters"
             className="rounded-xl border border-slate-300 px-4 py-2 font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
             onClick={clearFilters}
           >

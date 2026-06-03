@@ -8,16 +8,21 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME,
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
 });
 
-pool.getConnection((err, connection) => {
-  if (err) {
-    console.error("Database connection failed:", err);
-    return;
-  }
-  console.log("Connected to MySQL database via connection pool");
-  connection.release();
-});
+// Export the promise-based wrapper for async/await usage
+const promisePool = pool.promise();
 
-module.exports = pool;
+// Verify connectivity on startup
+promisePool
+  .getConnection()
+  .then((connection) => {
+    console.log("Connected to MySQL database via connection pool");
+    connection.release();
+  })
+  .catch((err) => {
+    console.error("Database connection failed:", err.message);
+  });
+
+module.exports = promisePool;

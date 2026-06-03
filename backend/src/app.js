@@ -1,3 +1,5 @@
+require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
 const db = require("./config/db");
@@ -39,9 +41,13 @@ app.use((req, res) => {
   res.status(404).json({ error: "Route not found" });
 });
 
+// Express 5 error handler — must have exactly 4 parameters
 app.use((err, req, res, _next) => {
   console.error("Unhandled error:", err);
-  res.status(500).json({ error: "Internal server error" });
+
+  if (!res.headersSent) {
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 const server = app.listen(port, () => {
@@ -50,11 +56,14 @@ const server = app.listen(port, () => {
 
 function shutdown() {
   console.log("\nShutting down gracefully...");
-  server.close(() => {
-    db.end(() => {
+  server.close(async () => {
+    try {
+      await db.end();
       console.log("Database pool closed.");
-      process.exit(0);
-    });
+    } catch {
+      // Pool may already be closed
+    }
+    process.exit(0);
   });
 }
 
