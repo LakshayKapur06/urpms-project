@@ -34,36 +34,38 @@
 
 URPMS is designed as a **database-centric** business application where critical workflow logic is enforced directly at the database level through stored procedures, functions, and triggers. This ensures data integrity and operational consistency regardless of the client consuming the API.
 
-The system tracks candidates through a structured recruitment pipeline (`APPLIED → SHORTLISTED → INTERVIEW_SCHEDULED → INTERVIEWED → OFFERED → HIRED`), captures interview evaluations, converts hires into employees, and manages payroll generation and payment tracking — all through a modern, responsive dashboard.
+The system tracks candidates through a structured recruitment pipeline (`APPLIED → SHORTLISTED → INTERVIEW_SCHEDULED → INTERVIEWED → OFFERED → HIRED`), captures interview evaluations, converts hires into employees, manages payroll generation, and features a robust **Soft-Delete Archive System** to maintain perfect auditability.
 
 ---
 
 ## ✨ Features
 
-### Recruitment Pipeline
-- **Candidate Management** — Create, browse, and filter candidates by CGPA & experience
-- **Application Pipeline** — Enforce valid state transitions through a 7-stage hiring workflow
-- **Interview Scheduling** — Schedule interviews with date/time and interviewer assignment
-- **Structured Feedback** — Capture technical, communication, and overall scores with remarks
-- **Automated Hiring** — Convert offered candidates into employees via database stored procedure
+### Recruitment Pipeline & Strict Isolation
+- **Strict Candidate Isolation** — The candidate staging area is strictly separated from the application pipeline. Once a candidate enters the pipeline, they are hidden from the general candidate pool.
+- **Application Pipeline** — Enforce valid state transitions through a 7-stage hiring workflow.
+- **Standardized Job Roles** — Candidates are strictly assigned to 15 standard corporate job roles (e.g. Software Engineer, AI/ML Engineer, Product Manager), enforced by database `ENUM` constraints across the entire lifecycle.
+- **Interview Scheduling & Feedback** — Schedule interviews, capture technical/communication scores, and aggregate multi-interviewer feedback safely.
+- **Bulk Operations** — Close entire job positions (auto-rejecting applications) or bulk-remove filtered candidate batches instantly.
+
+### The Archive System (Auditability)
+- **Soft-Delete Architecture** — Instead of destructive `DELETE` queries, removed candidates and applications are flagged with an `is_archived` state. This removes clutter from main UI views while perfectly preserving historical data, feedback scores, and status transitions for audits.
+- **Removed Records Dashboard** — A dedicated UI to view all archived candidates and applications, filterable by their removal stage and job position.
+- **Restore / Un-Remove Logic** — Accidental removals can be reversed. Restoring applications wipes out old feedback and securely drops them back to the starting `APPLIED` line, while candidate restorations safely drop candidates back into the general pool.
 
 ### Payroll & Finance
-- **Payroll Generation** — Generate monthly payroll records using stored procedures
-- **Payment Tracking** — Track and update payment completion status
-- **Compensation Management** — Store base salary and bonus percentage per employee
+- **Payroll Generation** — Generate monthly payroll records using stored procedures.
+- **Payment Tracking** — Track and update payment completion status.
+- **Compensation Management** — Store base salary and bonus percentage per employee.
 
 ### Dashboard & Analytics
-- **KPI Cards** — Total applications, hired count, shortlisted count, conversion rate
-- **Pipeline Distribution** — Interactive bar chart showing candidates at each stage
-- **Department Breakdown** — Pie chart visualization of employees by department
-- **Real-time Metrics** — All dashboard data is computed live from the database
+- **KPI Cards** — Total applications, hired count, shortlisted count, conversion rate.
+- **Pipeline Distribution** — Interactive bar chart showing candidates at each stage.
+- **Department Breakdown** — Pie chart visualization of employees by department.
 
 ### Platform
-- **JWT Authentication** — Secure login with role-based access control
-- **Dark Mode** — Full dark/light theme support persisted in localStorage
-- **Rate Limiting** — Login endpoint protected against brute force attacks
-- **Input Validation** — Comprehensive server-side validation on all endpoints
-- **Connection Pooling** — MySQL connection pool for reliable, high-performance queries
+- **JWT Authentication** — Secure login with role-based access control.
+- **Corporate UI** — Sleek, minimal interface featuring dark mode, glassmorphism, and structured typography.
+- **Rate Limiting & Input Validation** — Login endpoints protected against brute force, with comprehensive server-side validation.
 
 ---
 
@@ -75,9 +77,8 @@ The system tracks candidates through a structured recruitment pipeline (`APPLIED
 │                     │     │                      │     │                         │
 │  • Vite + HMR       │     │  • JWT Auth          │     │  • Stored Procedures    │
 │  • TailwindCSS      │     │  • Input Validation  │     │  • Triggers             │
-│  • Recharts         │     │  • Rate Limiting     │     │  • Functions            │
-│  • Framer Motion    │     │  • CORS + Security   │     │  • Audit Logging        │
-│  • Axios + Tokens   │     │  • Connection Pool   │     │  • Status History       │
+│  • Recharts         │     │  • Soft Deletes      │     │  • Strict ENUM Roles    │
+│  • Corporate UI     │     │  • CORS + Security   │     │  • Archive / Audit Logs │
 └─────────────────────┘     └──────────────────────┘     └─────────────────────────┘
 ```
 
@@ -106,29 +107,25 @@ The database enforces business rules at the SQL level, not just in application c
 | Table | Purpose |
 |-------|---------|
 | `users` | Admin accounts with hashed passwords |
-| `candidate` | Candidate profiles with academic and professional data |
-| `application` | Recruitment pipeline entries with status tracking |
+| `candidate` | Candidate profiles (`is_archived` tracking, strict `job_role` ENUM) |
+| `application` | Recruitment pipeline entries (`is_archived`, `archived_stage` tracking) |
 | `interview_feedback` | Structured interview evaluation scores |
-| `employee` | Hired candidate records with department assignment |
+| `employee` | Hired candidate records with matching `job_role` ENUM |
 | `compensation_offer` | Salary and bonus data per employee |
 | `payroll_transaction` | Monthly payroll records |
 | `payment_record` | Payment status tracking (PENDING/COMPLETED) |
-| `status_history` | Audit trail of all status transitions |
-| `audit_log` | General-purpose audit logging |
+| `status_history` | Audit trail of all status transitions (including Restore flows) |
+| `audit_log` | General-purpose audit logging for database triggers |
 
 ### Stored Procedures
-- **`hire_candidate`** — Atomically creates employee + compensation records and updates application status within a transaction
-- **`generate_payroll`** — Creates payroll and payment records from compensation data
-- **`filter_candidates`** — Server-side filtering by CGPA, experience, and salary
-- **`shortlist_candidates`** — Cursor-based batch shortlisting of high-CGPA candidates
+- **`hire_candidate`** — Atomically creates employee + compensation records and updates application status within a transaction.
+- **`generate_payroll`** — Creates payroll and payment records from compensation data.
+- **`filter_candidates`** — Server-side filtering by CGPA, experience, and salary (respecting archive flags).
 
 ### Triggers
-- **`before_insert_feedback`** — Auto-calculates overall score (60% technical + 40% communication)
-- **`after_application_status_update`** — Records status transitions in `status_history` and `audit_log`
-- **`validate_feedback_insert`** — Blocks feedback insertion unless application status is `INTERVIEWED`
-
-### Functions
-- **`calculate_score(tech, comm)`** — Weighted score calculation (deterministic)
+- **`before_insert_feedback`** — Auto-calculates overall score (60% technical + 40% communication).
+- **`after_application_status_update`** — Records status transitions in `status_history` and `audit_log`.
+- **`validate_feedback_insert`** — Blocks feedback insertion unless application status is `INTERVIEWED`.
 
 ---
 
@@ -162,7 +159,7 @@ cd backend
 npm install
 ```
 
-Create a `.env` file (use `.env.example` as a template):
+Create a `.env` file:
 ```env
 DB_HOST=localhost
 DB_USER=root
@@ -177,8 +174,6 @@ Start the server:
 npm run dev    # Development (auto-restart with nodemon)
 npm start      # Production
 ```
-
-The API will be available at `http://localhost:3000`.
 
 ### 4. Frontend Setup
 
@@ -200,64 +195,23 @@ The first user registered becomes the **ADMIN**. Navigate to the app and registe
 
 All endpoints (except auth) require a valid JWT in the `Authorization: Bearer <token>` header.
 
-### Authentication
+### Candidates & Archive
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/auth/register` | Register a new user (first user auto-becomes ADMIN) |
-| `POST` | `/auth/login` | Login and receive JWT token |
+| `GET` | `/candidates` | List active candidates (hides pipeline + archived) |
+| `DELETE` | `/candidates/bulk` | Soft-remove multiple candidates by filter |
+| `GET` | `/archive/candidates` | Fetch all archived candidates |
+| `POST` | `/archive/candidates/:id/restore`| Safely restore a candidate |
 
-### Candidates
+### Applications & Archive
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/candidates` | List all candidates (supports `minCgpa`, `minExperience` filters) |
-| `POST` | `/candidates` | Create a new candidate profile |
+| `GET` | `/applications` | List active applications (hides archived) |
+| `POST` | `/applications/close-position`| Auto-reject and soft-delete pipeline positions |
+| `GET` | `/archive/applications` | Fetch all archived applications |
+| `POST` | `/archive/applications/:id/restore`| Safely restore application, wipe feedback |
 
-### Applications
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/applications` | List all applications with feedback (supports `minScore` filter) |
-| `GET` | `/applications/filter` | Filter by CGPA, experience, salary, and score |
-| `POST` | `/applications` | Create a new application for a candidate |
-| `PUT` | `/applications/:id/status` | Update application status (with transition validation) |
-| `PUT` | `/applications/:id/schedule-interview` | Schedule an interview |
-| `PUT` | `/applications/:id/interviewed` | Mark application as interviewed |
-| `POST` | `/applications/:id/feedback` | Submit interview feedback scores |
-| `POST` | `/applications/:id/hire` | Hire candidate (calls stored procedure) |
-| `DELETE` | `/applications/:id` | Remove application from pipeline |
-
-### Employees
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/employees` | List all employees with candidate details |
-
-### Payroll
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/payroll/generate` | Generate payroll for an employee/month/year |
-| `GET` | `/payroll/payments` | List all payroll records with payment status |
-| `PUT` | `/payroll/payment/:id` | Update payment status |
-
-### Dashboard
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/dashboard/metrics` | Get all dashboard KPIs, pipeline data, and department data |
-
----
-
-## 🔐 Security
-
-| Feature | Implementation |
-|---------|---------------|
-| **Password Hashing** | bcryptjs with 12 salt rounds |
-| **JWT Tokens** | 8-hour expiry, mandatory `JWT_SECRET` (no fallback) |
-| **Role-Based Access** | Admin-only mutations, authentication on all data routes |
-| **Rate Limiting** | 10 login attempts per 15 minutes per IP+email |
-| **Security Headers** | X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, HSTS, Referrer-Policy, Permissions-Policy |
-| **CORS** | Restricted to configured frontend origin |
-| **Input Validation** | Email format, string length limits, numeric ranges, CGPA bounds, score bounds |
-| **SQL Injection** | All queries use parameterized statements |
-| **Body Size Limit** | Express JSON body limited to 100KB |
-| **Graceful Shutdown** | SIGTERM/SIGINT handlers cleanly close HTTP server and database pool |
+*(Standard CRUD routes for Auth, Payroll, and Dashboard metrics remain unchanged).*
 
 ---
 
@@ -268,53 +222,32 @@ urpms-project/
 ├── backend/
 │   ├── src/
 │   │   ├── app.js                    # Express server entry point
-│   │   ├── config/
-│   │   │   └── db.js                 # MySQL connection pool
-│   │   ├── middleware/
-│   │   │   ├── auth.js               # JWT authentication & role guards
-│   │   │   └── security.js           # Security headers & rate limiter
 │   │   ├── routes/
-│   │   │   ├── auth.routes.js        # Login & registration
-│   │   │   ├── candidate.routes.js   # Candidate CRUD
-│   │   │   ├── application.routes.js # Pipeline management
-│   │   │   ├── employees.routes.js   # Employee listing
-│   │   │   ├── payroll.routes.js     # Payroll generation & payments
-│   │   │   └── dashboard.routes.js   # Analytics metrics
-│   │   └── utils/
-│   │       └── validation.js         # Input validation helpers
-│   ├── .env.example                  # Environment variable template
+│   │   │   ├── archive.routes.js     # Archive / Soft Delete logic
+│   │   │   ├── candidate.routes.js   # Isolated Candidate CRUD
+│   │   │   └── ...                   # Application, Payroll, Dashboard
+│   │   └── ...                       # Middlewares, DB connections
+│   ├── update_db_archive.js          # Migration script for v2.0
 │   └── package.json
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── api/
-│   │   │   └── api.js                # Axios client with JWT interceptor
-│   │   ├── components/
-│   │   │   ├── AddCandidate.jsx      # Candidate creation form
-│   │   │   ├── KPICard.jsx           # Animated metric card
-│   │   │   ├── Sidebar.jsx           # Navigation with active state
-│   │   │   └── Topbar.jsx            # Header with dark mode toggle
 │   │   ├── pages/
-│   │   │   ├── Dashboard.jsx         # KPIs, charts, and analytics
-│   │   │   ├── Candidates.jsx        # Candidate list and pipeline entry
-│   │   │   ├── Applications.jsx      # Full pipeline management UI
-│   │   │   ├── Payroll.jsx           # Payroll generation and tracking
-│   │   │   └── Login.jsx             # Authentication form
-│   │   ├── App.jsx                   # Root component with routing
-│   │   └── index.css                 # Global styles and theme
-│   ├── index.html
+│   │   │   ├── Candidates.jsx        # Candidate listing with isolation banner
+│   │   │   ├── Removed.jsx           # Dedicated Archive viewing dashboard
+│   │   │   └── ...                   # Applications, Dashboard, Payroll
+│   │   ├── components/               # Forms, KPI Cards, minimal Sidebar
+│   │   └── App.jsx                   # Root router
 │   └── package.json
 │
-├── database/
-│   └── SQL Code.sql                  # Complete schema, procedures, triggers & seed data
-│
-└── README.md
+└── database/
+    └── SQL Code.sql                  # Complete schema (procedures, triggers)
 ```
 
 ---
 
 <div align="center">
 
-*Built for modern HR operations. Database-centric by design.*
+*Built for modern HR operations. Database-centric by design. Version 2.0*
 
 </div>
