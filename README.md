@@ -380,6 +380,6 @@ urpms-project/
 
 **Built for modern HR operations. Database-centric by design.**
 
-*URPMS demonstrates full-stack engineering across React, Node.js, and MySQL — with production-grade security, database-level business logic, and enterprise audit compliance.*
+URPMS demonstrates full-stack engineering across React, Node.js, and MySQL — with production-grade security, database-level business logic, and enterprise audit compliance.
 
 </div>
