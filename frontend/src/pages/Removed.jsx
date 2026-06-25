@@ -159,7 +159,7 @@ export default function Removed() {
                   <div>
                     <p className="font-medium">{a.first_name} {a.last_name}</p>
                     <p className="mt-1 text-sm text-slate-500">{a.email}</p>
-                    <div className="mt-2 flex gap-2">
+                    <div className="mt-2 flex flex-wrap gap-2">
                       <span className="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                         {a.job_role}
                       </span>
@@ -167,6 +167,20 @@ export default function Removed() {
                         Removed at: {a.archived_stage || "UNKNOWN"}
                       </span>
                     </div>
+                    <div className="mt-2 grid gap-1 text-xs text-slate-500 dark:text-slate-400 md:grid-cols-2 xl:grid-cols-4">
+                      <p>CGPA: {a.cgpa ?? "N/A"}</p>
+                      <p>Experience: {a.experience_years ?? 0} yrs</p>
+                      <p>Expected Salary: {a.expected_salary != null ? `₹${Number(a.expected_salary).toLocaleString("en-IN")}` : "N/A"}</p>
+                      <p>Specialization: {a.specialization || "N/A"}</p>
+                    </div>
+                    {(a.technical_score != null || a.feedback_remarks) && (
+                      <div className="mt-2 grid gap-1 text-xs text-slate-500 dark:text-slate-400 md:grid-cols-2 xl:grid-cols-4">
+                        <p>Technical: {a.technical_score ?? "N/A"}</p>
+                        <p>Communication: {a.communication_score ?? "N/A"}</p>
+                        <p>Overall: {a.overall_score ?? "N/A"}</p>
+                        <p>Feedback: {a.feedback_remarks || "None"}</p>
+                      </div>
+                    )}
                   </div>
                   <button
                     onClick={() => handleRestoreApplication(a.application_id)}

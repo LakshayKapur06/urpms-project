@@ -56,6 +56,7 @@ export default function Candidates() {
         message: `Candidate moved into the pipeline as application #${res.data.application_id}.`,
       });
       setPipelineForm(initialPipelineForm);
+      loadCandidates();
     } catch (err) {
       setNotice({
         type: "error",
@@ -257,12 +258,16 @@ export default function Candidates() {
 
                 {isOpen ? (
                   <form onSubmit={createApplication} className="mt-4 grid gap-3 md:grid-cols-2">
-                    <input
+                    <select
                       className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                      placeholder="Job Role"
                       value={pipelineForm.job_role}
                       onChange={(e) => setPipelineForm((current) => ({ ...current, job_role: e.target.value }))}
-                    />
+                    >
+                      <option value="">Select Job Role</option>
+                      {["Software Engineer", "Frontend Developer", "Backend Developer", "Full Stack Developer", "DevOps Engineer", "AI/ML Engineer", "Data Scientist", "Product Manager", "UI/UX Designer", "HR Manager", "Talent Acquisition", "Sales Executive", "Marketing Manager", "Financial Analyst", "IT Administrator"].map(role => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                    </select>
                     <input
                       type="number"
                       min="0"

@@ -117,7 +117,7 @@ router.post("/", async (req, res) => {
 });
 
 router.get("/", async (req, res) => {
-  const { minCgpa, minExperience } = req.query;
+  const { minCgpa, maxCgpa, minExperience, job_role } = req.query;
   const where = [];
   const params = [];
 
@@ -125,40 +125,54 @@ router.get("/", async (req, res) => {
     if (!isNonNegativeNumber(minCgpa)) {
       return res.status(400).json({ error: "minCgpa must be a non-negative number" });
     }
-    where.push("COALESCE(cgpa, 0) >= ?");
+    where.push("COALESCE(c.cgpa, 0) >= ?");
     params.push(Number(minCgpa));
+  }
+
+  if (maxCgpa !== undefined && maxCgpa !== "") {
+    if (!isNonNegativeNumber(maxCgpa)) {
+      return res.status(400).json({ error: "maxCgpa must be a non-negative number" });
+    }
+    where.push("COALESCE(c.cgpa, 0) <= ?");
+    params.push(Number(maxCgpa));
   }
 
   if (minExperience !== undefined && minExperience !== "") {
     if (!isNonNegativeNumber(minExperience)) {
       return res.status(400).json({ error: "minExperience must be a non-negative number" });
     }
-    where.push("COALESCE(experience_years, 0) >= ?");
+    where.push("COALESCE(c.experience_years, 0) >= ?");
     params.push(Number(minExperience));
   }
 
-  where.push("is_archived = FALSE");
-  where.push("candidate_id NOT IN (SELECT candidate_id FROM application)");
+  if (job_role !== undefined && job_role !== "") {
+    where.push("c.job_role = ?");
+    params.push(job_role);
+  }
+
+  where.push("c.is_archived = FALSE");
 
   try {
     const query = `
       SELECT
-        candidate_id,
-        first_name,
-        last_name,
-        email,
-        phone,
-        college_name,
-        degree,
-        specialization,
-        cgpa,
-        experience_years,
-        skills,
-        job_role,
-        created_at
-      FROM candidate
-      ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
-      ORDER BY created_at DESC, candidate_id DESC
+        c.candidate_id,
+        c.first_name,
+        c.last_name,
+        c.email,
+        c.phone,
+        c.college_name,
+        c.degree,
+        c.specialization,
+        c.cgpa,
+        c.experience_years,
+        c.skills,
+        c.job_role,
+        c.created_at
+      FROM candidate c
+      LEFT JOIN application a ON a.candidate_id = c.candidate_id
+      WHERE a.candidate_id IS NULL
+        ${where.length ? `AND ${where.join(" AND ")}` : ""}
+      ORDER BY c.created_at DESC, c.candidate_id DESC
     `;
 
     const [results] = await db.query(query, params);
@@ -174,6 +188,10 @@ router.delete("/bulk", requireRole("ADMIN"), async (req, res) => {
 
   let filterClause = "";
   const params = [];
+
+  if (minCgpa && !isNonNegativeNumber(minCgpa)) return res.status(400).json({ error: "minCgpa must be a number" });
+  if (maxCgpa && !isNonNegativeNumber(maxCgpa)) return res.status(400).json({ error: "maxCgpa must be a number" });
+  if (minExperience && !isNonNegativeNumber(minExperience)) return res.status(400).json({ error: "minExperience must be a number" });
 
   if (minCgpa) { filterClause += " AND COALESCE(cgpa, 0) >= ?"; params.push(Number(minCgpa)); }
   if (maxCgpa) { filterClause += " AND COALESCE(cgpa, 0) <= ?"; params.push(Number(maxCgpa)); }

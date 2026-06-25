@@ -12,13 +12,13 @@ router.get("/metrics", async (req, res) => {
     const [candidatesByStage, conversionRate, employeesPerDept] = await Promise.all([
       db.query(`
         SELECT status, COUNT(*) AS count
-        FROM application GROUP BY status
+        FROM application WHERE is_archived = FALSE GROUP BY status
       `),
       db.query(`
         SELECT
           COALESCE((COUNT(CASE WHEN status = 'HIRED' THEN 1 END) * 100.0) / NULLIF(COUNT(*), 0), 0)
           AS conversion_rate
-        FROM application
+        FROM application WHERE is_archived = FALSE
       `),
       db.query(`
         SELECT department, COUNT(*) AS total

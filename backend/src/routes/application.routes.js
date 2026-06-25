@@ -586,11 +586,7 @@ router.delete("/bulk", requireRole("ADMIN"), async (req, res) => {
 
     const appIds = rows.map(r => r.application_id);
 
-    await Promise.all([
-      db.query("DELETE FROM interview_feedback WHERE application_id IN (?)", [appIds]),
-      db.query("DELETE FROM status_history WHERE application_id IN (?)", [appIds]),
-    ]);
-
+    // Soft-delete: preserve all feedback and status_history for audit trail
     const [result] = await db.query("UPDATE application SET is_archived = TRUE, archived_stage = status WHERE application_id IN (?)", [appIds]);
 
     return res.json({ message: `Removed ${result.affectedRows} applications from pipeline`, count: result.affectedRows });
@@ -616,22 +612,8 @@ router.post("/close-position", requireRole("ADMIN"), async (req, res) => {
     }
 
     const appIds = rows.map(r => r.application_id);
-    const interviewedIds = rows.filter(r => r.status === 'INTERVIEWED').map(r => r.application_id);
 
-    // Insert feedback for INTERVIEWED ones
-    if (interviewedIds.length > 0) {
-      const feedbackValues = interviewedIds.map(id => [id, req.user.user_id, 0, 0, 'Position closed']);
-      await db.query(
-        "INSERT IGNORE INTO interview_feedback (application_id, user_id, technical_score, communication_score, remarks) VALUES ?",
-        [feedbackValues]
-      );
-    }
-
-    await Promise.all([
-      db.query("DELETE FROM interview_feedback WHERE application_id IN (?)", [appIds]),
-      db.query("DELETE FROM status_history WHERE application_id IN (?)", [appIds]),
-    ]);
-
+    // Soft-delete: preserve all feedback and status_history for audit trail
     const [result] = await db.query("UPDATE application SET is_archived = TRUE, archived_stage = status WHERE application_id IN (?)", [appIds]);
 
     return res.json({ message: `Closed position. Rejected and removed ${result.affectedRows} applications.`, count: result.affectedRows });
@@ -650,12 +632,7 @@ router.delete("/:id", requireRole("ADMIN"), async (req, res) => {
   }
 
   try {
-    // Delete dependent records in parallel since they're independent
-    await Promise.all([
-      db.query("DELETE FROM interview_feedback WHERE application_id = ?", [application_id]),
-      db.query("DELETE FROM status_history WHERE application_id = ?", [application_id]),
-    ]);
-
+    // Soft-delete: preserve all feedback and status_history for audit trail
     const [result] = await db.query("UPDATE application SET is_archived = TRUE, archived_stage = status WHERE application_id = ?", [
       application_id,
     ]);
