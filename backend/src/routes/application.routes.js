@@ -71,7 +71,7 @@ async function getApplicationDetailsById(application_id) {
     FROM application a
     JOIN candidate c ON c.candidate_id = a.candidate_id
     ${latestFeedbackJoin()}
-    WHERE a.application_id = ?
+    WHERE a.application_id = ? AND a.is_archived = FALSE
     LIMIT 1
   `;
 
@@ -90,7 +90,7 @@ function formatInterviewDateTime(value) {
 // GET all applications (with optional minScore filter)
 router.get("/", async (req, res) => {
   const { minScore } = req.query;
-  const params = [];
+  const params = [req.user.user_id];
   let scoreFilter = "";
 
   if (minScore !== undefined && minScore !== "") {
@@ -125,11 +125,13 @@ router.get("/", async (req, res) => {
         feedback.technical_score,
         feedback.communication_score,
         feedback.overall_score,
-        feedback.remarks
+        feedback.remarks,
+        EXISTS(SELECT 1 FROM interview_feedback WHERE application_id = a.application_id AND user_id = ?) AS user_has_feedback
       FROM application a
       JOIN candidate c ON c.candidate_id = a.candidate_id
       ${latestFeedbackJoin()}
-      ${scoreFilter}
+      WHERE a.is_archived = FALSE
+      ${scoreFilter ? 'AND ' + scoreFilter.replace('WHERE ', '') : ''}
       ORDER BY a.applied_at DESC, a.application_id DESC
     `;
 
@@ -159,7 +161,7 @@ router.get("/filter", async (req, res) => {
       [Number(minCgpa), Number(minExp), Number(maxSalary)],
     );
 
-    const filtered = procResults[0] || [];
+    const filtered = (procResults[0] || []).filter(row => !row.is_archived);
 
     if (!filtered.length) {
       return res.json([]);
@@ -174,7 +176,8 @@ router.get("/filter", async (req, res) => {
         f1.technical_score,
         f1.communication_score,
         f1.overall_score,
-        f1.remarks
+        f1.remarks,
+        EXISTS(SELECT 1 FROM interview_feedback sub WHERE sub.application_id = f1.application_id AND sub.user_id = ?) AS user_has_feedback
       FROM interview_feedback f1
       INNER JOIN (
         SELECT application_id, MAX(feedback_id) AS latest_feedback_id
@@ -185,7 +188,7 @@ router.get("/filter", async (req, res) => {
         ON latest.latest_feedback_id = f1.feedback_id
     `;
 
-    const [feedbackRows] = await db.query(feedbackQuery, applicationIds);
+    const [feedbackRows] = await db.query(feedbackQuery, [req.user.user_id, ...applicationIds]);
 
     const feedbackMap = new Map(feedbackRows.map((row) => [row.application_id, row]));
     const merged = filtered.map((row) => ({
@@ -455,14 +458,16 @@ router.post("/:id/feedback", requireRole("ADMIN"), async (req, res) => {
       `
         INSERT INTO interview_feedback (
           application_id,
+          user_id,
           technical_score,
           communication_score,
           remarks
         )
-        VALUES (?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?)
       `,
       [
         application_id,
+        req.user.user_id,
         Number(technical_score),
         Number(communication_score),
         remarks?.trim() || null,
@@ -498,6 +503,9 @@ router.post("/:id/feedback", requireRole("ADMIN"), async (req, res) => {
     });
   } catch (err) {
     console.error(err);
+    if (err.code === "ER_DUP_ENTRY") {
+      return res.status(400).json({ error: "Feedback already submitted by you for this candidate." });
+    }
     return res.status(400).json({
       error: err.sqlMessage || "Failed to save interview feedback",
     });
@@ -558,6 +566,81 @@ router.post("/:id/hire", requireRole("ADMIN"), async (req, res) => {
   }
 });
 
+// DELETE bulk-remove
+router.delete("/bulk", requireRole("ADMIN"), async (req, res) => {
+  const { job_role, status } = req.query;
+  
+  if (!job_role || !status) {
+    return res.status(400).json({ error: "job_role and status are required" });
+  }
+
+  try {
+    const [rows] = await db.query(
+      "SELECT application_id FROM application WHERE job_role = ? AND status = ? AND is_archived = FALSE",
+      [job_role, status]
+    );
+
+    if (rows.length === 0) {
+      return res.json({ message: "No applications matched the criteria", count: 0 });
+    }
+
+    const appIds = rows.map(r => r.application_id);
+
+    await Promise.all([
+      db.query("DELETE FROM interview_feedback WHERE application_id IN (?)", [appIds]),
+      db.query("DELETE FROM status_history WHERE application_id IN (?)", [appIds]),
+    ]);
+
+    const [result] = await db.query("UPDATE application SET is_archived = TRUE, archived_stage = status WHERE application_id IN (?)", [appIds]);
+
+    return res.json({ message: `Removed ${result.affectedRows} applications from pipeline`, count: result.affectedRows });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Failed to perform bulk remove" });
+  }
+});
+
+// POST close-position
+router.post("/close-position", requireRole("ADMIN"), async (req, res) => {
+  const { job_role } = req.body;
+  if (!job_role) return res.status(400).json({ error: "job_role is required" });
+
+  try {
+    const [rows] = await db.query(
+      "SELECT application_id, status FROM application WHERE job_role = ? AND status NOT IN ('HIRED', 'INTERVIEW_SCHEDULED') AND is_archived = FALSE",
+      [job_role]
+    );
+
+    if (rows.length === 0) {
+      return res.json({ message: "No applicable applications found to close.", count: 0 });
+    }
+
+    const appIds = rows.map(r => r.application_id);
+    const interviewedIds = rows.filter(r => r.status === 'INTERVIEWED').map(r => r.application_id);
+
+    // Insert feedback for INTERVIEWED ones
+    if (interviewedIds.length > 0) {
+      const feedbackValues = interviewedIds.map(id => [id, req.user.user_id, 0, 0, 'Position closed']);
+      await db.query(
+        "INSERT IGNORE INTO interview_feedback (application_id, user_id, technical_score, communication_score, remarks) VALUES ?",
+        [feedbackValues]
+      );
+    }
+
+    await Promise.all([
+      db.query("DELETE FROM interview_feedback WHERE application_id IN (?)", [appIds]),
+      db.query("DELETE FROM status_history WHERE application_id IN (?)", [appIds]),
+    ]);
+
+    const [result] = await db.query("UPDATE application SET is_archived = TRUE, archived_stage = status WHERE application_id IN (?)", [appIds]);
+
+    return res.json({ message: `Closed position. Rejected and removed ${result.affectedRows} applications.`, count: result.affectedRows });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Failed to close position" });
+  }
+});
+
 // DELETE application
 router.delete("/:id", requireRole("ADMIN"), async (req, res) => {
   const application_id = Number(req.params.id);
@@ -573,10 +656,9 @@ router.delete("/:id", requireRole("ADMIN"), async (req, res) => {
       db.query("DELETE FROM status_history WHERE application_id = ?", [application_id]),
     ]);
 
-    const [result] = await db.query(
-      "DELETE FROM application WHERE application_id = ?",
-      [application_id],
-    );
+    const [result] = await db.query("UPDATE application SET is_archived = TRUE, archived_stage = status WHERE application_id = ?", [
+      application_id,
+    ]);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: "Application not found" });

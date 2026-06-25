@@ -1,6 +1,6 @@
 const express = require("express");
 const db = require("../config/db");
-const { authenticateToken } = require("../middleware/auth");
+const { authenticateToken, requireRole } = require("../middleware/auth");
 const {
   isValidEmail,
   isNonEmptyString,
@@ -25,6 +25,7 @@ router.post("/", async (req, res) => {
     cgpa,
     experience_years,
     skills,
+    job_role,
   } = req.body;
 
   if (!isNonEmptyString(first_name, 100) || !isNonEmptyString(last_name, 100)) {
@@ -78,9 +79,10 @@ router.post("/", async (req, res) => {
         specialization,
         cgpa,
         experience_years,
-        skills
+        skills,
+        job_role
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const [result] = await db.query(query, [
@@ -96,6 +98,7 @@ router.post("/", async (req, res) => {
         ? 0
         : Number(experience_years),
       skills?.trim() || null,
+      job_role?.trim() || 'Software Engineer',
     ]);
 
     return res.status(201).json({
@@ -134,6 +137,9 @@ router.get("/", async (req, res) => {
     params.push(Number(minExperience));
   }
 
+  where.push("is_archived = FALSE");
+  where.push("candidate_id NOT IN (SELECT candidate_id FROM application)");
+
   try {
     const query = `
       SELECT
@@ -148,6 +154,7 @@ router.get("/", async (req, res) => {
         cgpa,
         experience_years,
         skills,
+        job_role,
         created_at
       FROM candidate
       ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
@@ -159,6 +166,33 @@ router.get("/", async (req, res) => {
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Database error" });
+  }
+});
+
+router.delete("/bulk", requireRole("ADMIN"), async (req, res) => {
+  const { minCgpa, maxCgpa, minExperience, job_role } = req.query;
+
+  let filterClause = "";
+  const params = [];
+
+  if (minCgpa) { filterClause += " AND COALESCE(cgpa, 0) >= ?"; params.push(Number(minCgpa)); }
+  if (maxCgpa) { filterClause += " AND COALESCE(cgpa, 0) <= ?"; params.push(Number(maxCgpa)); }
+  if (minExperience) { filterClause += " AND COALESCE(experience_years, 0) >= ?"; params.push(Number(minExperience)); }
+  if (job_role) { filterClause += " AND job_role = ?"; params.push(job_role); }
+
+  try {
+    const query = `
+      UPDATE candidate 
+      SET is_archived = TRUE 
+      WHERE is_archived = FALSE 
+        AND candidate_id NOT IN (SELECT candidate_id FROM application)
+        ${filterClause}
+    `;
+    const [result] = await db.query(query, params);
+    return res.json({ message: `Archived ${result.affectedRows} candidates.`, count: result.affectedRows });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Failed to perform bulk remove" });
   }
 });
 

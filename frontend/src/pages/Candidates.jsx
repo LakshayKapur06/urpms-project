@@ -14,7 +14,7 @@ export default function Candidates() {
   const [candidates, setCandidates] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
-  const [filters, setFilters] = useState({ minCgpa: "", minExperience: "" });
+  const [filters, setFilters] = useState({ minCgpa: "", maxCgpa: "", minExperience: "", job_role: "" });
   const [notice, setNotice] = useState(null);
   const [pipelineForm, setPipelineForm] = useState(initialPipelineForm);
   const [isSubmittingPipeline, setIsSubmittingPipeline] = useState(false);
@@ -26,7 +26,9 @@ export default function Candidates() {
       const res = await API.get("/candidates", {
         params: {
           minCgpa: appliedFilters.minCgpa || undefined,
+          maxCgpa: appliedFilters.maxCgpa || undefined,
           minExperience: appliedFilters.minExperience || undefined,
+          job_role: appliedFilters.job_role || undefined,
         },
       });
       setCandidates(res.data);
@@ -64,27 +66,54 @@ export default function Candidates() {
     }
   };
 
+  const handleBulkRemove = async () => {
+    if (!window.confirm("Are you sure you want to archive all candidates matching the current filters?")) return;
+    try {
+      setIsLoading(true);
+      const res = await API.delete("/candidates/bulk", {
+        params: {
+          minCgpa: filters.minCgpa || undefined,
+          maxCgpa: filters.maxCgpa || undefined,
+          minExperience: filters.minExperience || undefined,
+          job_role: filters.job_role || undefined,
+        }
+      });
+      setNotice({ type: "success", message: res.data.message });
+      loadCandidates();
+    } catch (error) {
+      setNotice({
+        type: "error",
+        message: error.response?.data?.error || "Could not bulk remove candidates.",
+      });
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <AddCandidate onCreated={() => loadCandidates()} />
 
-      <div className="rounded-2xl border border-slate-200/70 bg-white/75 p-6 shadow-sm backdrop-blur-md transition-colors duration-300 dark:border-slate-700 dark:bg-slate-900/70">
+      <div className="rounded-2xl border border-slate-200/70 bg-white/75 p-6 shadow-sm backdrop-blur-md transition-colors duration-300 dark:border-neutral-800/80 dark:bg-neutral-900/60">
         <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">
           Candidates
         </h1>
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
           Browse candidates, filter by academic fit, and move specific people into the hiring pipeline.
         </p>
+        <div className="mt-4 rounded-xl border border-blue-200/80 bg-blue-50/80 p-3 dark:border-blue-900/60 dark:bg-blue-900/20">
+          <p className="text-sm font-medium text-blue-700 dark:text-blue-400">
+            ℹ️ This page ONLY contains candidates who are NOT currently active in the application pipeline.
+          </p>
+        </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200/70 bg-white/75 p-6 shadow-sm backdrop-blur-md transition-colors duration-300 dark:border-slate-700 dark:bg-slate-900/70">
+      <div className="rounded-2xl border border-slate-200/70 bg-white/75 p-6 shadow-sm backdrop-blur-md transition-colors duration-300 dark:border-neutral-800/80 dark:bg-neutral-900/60">
         <div className="grid gap-4 md:grid-cols-2">
           <input
             type="number"
             step="0.01"
             min="0"
             max="10"
-            id="filter-min-cgpa"
             className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             placeholder="Min CGPA"
             value={filters.minCgpa}
@@ -92,16 +121,35 @@ export default function Candidates() {
           />
           <input
             type="number"
+            step="0.01"
             min="0"
-            id="filter-min-experience"
+            max="10"
+            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            placeholder="Max CGPA"
+            value={filters.maxCgpa}
+            onChange={(e) => setFilters((current) => ({ ...current, maxCgpa: e.target.value }))}
+          />
+          <input
+            type="number"
+            min="0"
             className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             placeholder="Min Experience"
             value={filters.minExperience}
             onChange={(e) => setFilters((current) => ({ ...current, minExperience: e.target.value }))}
           />
+          <select
+            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            value={filters.job_role}
+            onChange={(e) => setFilters((current) => ({ ...current, job_role: e.target.value }))}
+          >
+            <option value="">Any Role</option>
+            {["Software Engineer", "Frontend Developer", "Backend Developer", "Full Stack Developer", "DevOps Engineer", "AI/ML Engineer", "Data Scientist", "Product Manager", "UI/UX Designer", "HR Manager", "Talent Acquisition", "Sales Executive", "Marketing Manager", "Financial Analyst", "IT Administrator"].map(role => (
+              <option key={role} value={role}>{role}</option>
+            ))}
+          </select>
         </div>
 
-        <div className="mt-4 flex gap-3">
+        <div className="mt-4 flex gap-3 flex-wrap">
           <button
             id="btn-apply-filters"
             className="rounded-xl bg-blue-600 px-4 py-2 font-medium text-white transition hover:bg-blue-500"
@@ -113,12 +161,18 @@ export default function Candidates() {
             id="btn-reset-filters"
             className="rounded-xl border border-slate-300 px-4 py-2 font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
             onClick={() => {
-              const reset = { minCgpa: "", minExperience: "" };
+              const reset = { minCgpa: "", maxCgpa: "", minExperience: "", job_role: "" };
               setFilters(reset);
               loadCandidates(reset);
             }}
           >
             Reset
+          </button>
+          <button
+            onClick={handleBulkRemove}
+            className="rounded-xl bg-rose-600 px-4 py-2 font-medium text-white transition hover:bg-rose-500 ml-auto"
+          >
+            Remove Filtered Candidates
           </button>
         </div>
       </div>
@@ -142,13 +196,13 @@ export default function Candidates() {
       ) : null}
 
       {isLoading ? (
-        <div className="rounded-2xl border border-slate-200/70 bg-white/70 p-6 text-sm text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">
+        <div className="rounded-2xl border border-slate-200/70 bg-white/70 p-6 text-sm text-slate-500 shadow-sm dark:border-neutral-800/80 dark:bg-neutral-900/50 dark:text-slate-300">
           Loading candidates...
         </div>
       ) : null}
 
       {!isLoading && !error && candidates.length === 0 ? (
-        <div className="rounded-2xl border border-slate-200/70 bg-white/70 p-6 text-sm text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">
+        <div className="rounded-2xl border border-slate-200/70 bg-white/70 p-6 text-sm text-slate-500 shadow-sm dark:border-neutral-800/80 dark:bg-neutral-900/50 dark:text-slate-300">
           No candidates matched the selected filters.
         </div>
       ) : null}
@@ -161,7 +215,7 @@ export default function Candidates() {
             return (
               <div
                 key={c.candidate_id}
-                className="rounded-2xl border border-slate-200/70 bg-white/70 p-4 text-slate-700 shadow-sm transition-colors duration-300 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200"
+                className="rounded-2xl border border-slate-200/70 bg-white/70 p-4 text-slate-700 shadow-sm transition-colors duration-300 dark:border-neutral-800/80 dark:bg-neutral-900/50 dark:text-slate-200"
               >
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
@@ -182,7 +236,7 @@ export default function Candidates() {
                           ? initialPipelineForm
                           : {
                               candidate_id: c.candidate_id,
-                              job_role: "",
+                              job_role: c.job_role || "",
                               expected_salary: "",
                               notice_period: "",
                               application_source: "",

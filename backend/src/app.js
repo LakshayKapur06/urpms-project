@@ -10,6 +10,7 @@ const payrollRoutes = require("./routes/payroll.routes");
 const dashboardRoutes = require("./routes/dashboard.routes");
 const employeesRoutes = require("./routes/employees.routes");
 const authRoutes = require("./routes/auth.routes");
+const archiveRoutes = require("./routes/archive.routes");
 const { securityHeaders } = require("./middleware/security");
 
 const app = express();
@@ -36,6 +37,7 @@ app.use("/applications", applicationRoutes);
 app.use("/payroll", payrollRoutes);
 app.use("/dashboard", dashboardRoutes);
 app.use("/employees", employeesRoutes);
+app.use("/archive", archiveRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ error: "Route not found" });

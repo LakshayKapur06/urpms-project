@@ -12,6 +12,7 @@ const initialForm = {
   cgpa: "",
   experience_years: "",
   skills: "",
+  job_role: "Software Engineer",
 };
 
 export default function AddCandidate({ onCreated }) {
@@ -66,6 +67,15 @@ export default function AddCandidate({ onCreated }) {
       ) : null}
 
       <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <select
+          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 md:col-span-2"
+          value={form.job_role}
+          onChange={(e) => updateField("job_role", e.target.value)}
+        >
+          {["Software Engineer", "Frontend Developer", "Backend Developer", "Full Stack Developer", "DevOps Engineer", "AI/ML Engineer", "Data Scientist", "Product Manager", "UI/UX Designer", "HR Manager", "Talent Acquisition", "Sales Executive", "Marketing Manager", "Financial Analyst", "IT Administrator"].map(role => (
+            <option key={role} value={role}>{role}</option>
+          ))}
+        </select>
         <input
           className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
           placeholder="First Name"

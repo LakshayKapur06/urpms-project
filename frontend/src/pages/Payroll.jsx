@@ -86,7 +86,7 @@ export default function Payroll() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-slate-200/70 bg-white/75 p-6 shadow-sm backdrop-blur-md transition-colors duration-300 dark:border-slate-700 dark:bg-slate-900/70">
+      <div className="rounded-2xl border border-slate-200/70 bg-white/75 p-6 shadow-sm backdrop-blur-md transition-colors duration-300 dark:border-neutral-800/80 dark:bg-neutral-900/60">
         <h2 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Payroll</h2>
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
           Generate payroll cycles and track payment completion.
@@ -95,7 +95,7 @@ export default function Payroll() {
 
       <form
         onSubmit={generatePayroll}
-        className="rounded-2xl border border-slate-200/70 bg-white/75 p-6 shadow-sm backdrop-blur-md transition-colors duration-300 dark:border-slate-700 dark:bg-slate-900/70"
+        className="rounded-2xl border border-slate-200/70 bg-white/75 p-6 shadow-sm backdrop-blur-md transition-colors duration-300 dark:border-neutral-800/80 dark:bg-neutral-900/60"
       >
         <div className="grid gap-4 md:grid-cols-3">
           <select
@@ -157,14 +157,14 @@ export default function Payroll() {
       ) : null}
 
       {isLoading ? (
-        <div className="rounded-2xl border border-slate-200/70 bg-white/70 p-6 text-sm text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">
+        <div className="rounded-2xl border border-slate-200/70 bg-white/70 p-6 text-sm text-slate-500 shadow-sm dark:border-neutral-800/80 dark:bg-neutral-900/50 dark:text-slate-300">
           Loading payroll records...
         </div>
       ) : null}
 
       {!isLoading &&
         payments.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200/70 bg-white/70 p-6 text-sm text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">
+          <div className="rounded-2xl border border-slate-200/70 bg-white/70 p-6 text-sm text-slate-500 shadow-sm dark:border-neutral-800/80 dark:bg-neutral-900/50 dark:text-slate-300">
             No payroll records found yet.
           </div>
         ) : null}
@@ -176,7 +176,7 @@ export default function Payroll() {
           return (
             <div
               key={p.payroll_id}
-              className="rounded-2xl border border-slate-200/70 bg-white/70 p-4 text-slate-700 shadow-sm transition-colors duration-300 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200"
+              className="rounded-2xl border border-slate-200/70 bg-white/70 p-4 text-slate-700 shadow-sm transition-colors duration-300 dark:border-neutral-800/80 dark:bg-neutral-900/50 dark:text-slate-200"
             >
               <p className="font-medium">Payroll #{p.payroll_id}</p>
               <div className="mt-2 grid gap-2 text-sm text-slate-500 dark:text-slate-400 md:grid-cols-2 xl:grid-cols-4">

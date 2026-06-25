@@ -5,6 +5,7 @@ import Dashboard from "./pages/Dashboard";
 import Candidates from "./pages/Candidates";
 import Applications from "./pages/Applications";
 import Payroll from "./pages/Payroll";
+import Removed from "./pages/Removed";
 import Login from "./pages/Login";
 
 const pageTitles = {
@@ -12,6 +13,7 @@ const pageTitles = {
   candidates: "Candidates",
   applications: "Applications",
   payroll: "Payroll",
+  removed: "Removed",
 };
 
 export default function App() {
@@ -27,14 +29,18 @@ export default function App() {
 
   const renderPage = () => {
     switch (page) {
+      case "dashboard":
+        return <Dashboard setPage={setPage} />;
       case "candidates":
         return <Candidates />;
       case "applications":
         return <Applications />;
       case "payroll":
         return <Payroll />;
+      case "removed":
+        return <Removed />;
       default:
-        return <Dashboard />;
+        return <Dashboard setPage={setPage} />;
     }
   };
 

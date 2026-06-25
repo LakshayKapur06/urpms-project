@@ -49,6 +49,55 @@ export default function Applications() {
   const [scheduleForm, setScheduleForm] = useState(initialScheduleForm);
   const [feedbackForm, setFeedbackForm] = useState(initialFeedbackForm);
   const [hireForm, setHireForm] = useState(initialHireForm);
+  const [selectedStage, setSelectedStage] = useState("ALL");
+  const [selectedPosition, setSelectedPosition] = useState("ALL");
+
+  const stages = ["ALL", "APPLIED", "SHORTLISTED", "INTERVIEW_SCHEDULED", "INTERVIEWED", "OFFERED", "HIRED", "REJECTED"];
+  const uniquePositions = ["ALL", ...new Set(apps.map((a) => a.job_role))];
+
+  const displayedApps = apps.filter(a => {
+    if (selectedStage !== "ALL" && a.status !== selectedStage) return false;
+    if (selectedPosition !== "ALL" && a.job_role !== selectedPosition) return false;
+    return true;
+  });
+
+  const handleBulkRemove = async () => {
+    if (selectedPosition === "ALL" || selectedStage === "ALL") return;
+    if (!window.confirm(`Are you sure you want to remove all ${selectedStage} applications for ${selectedPosition}?`)) return;
+
+    try {
+      setIsLoading(true);
+      const res = await API.delete("/applications/bulk", {
+        params: { job_role: selectedPosition, status: selectedStage }
+      });
+      setNotice({ type: "success", message: res.data.message });
+      loadApplications();
+    } catch (error) {
+      setNotice({
+        type: "error",
+        message: error.response?.data?.error || "Could not bulk remove applications.",
+      });
+      setIsLoading(false);
+    }
+  };
+
+  const handleClosePosition = async () => {
+    if (selectedPosition === "ALL") return;
+    if (!window.confirm(`Are you sure you want to close the position for ${selectedPosition}? This will reject all non-hired/scheduled candidates.`)) return;
+
+    try {
+      setIsLoading(true);
+      const res = await API.post("/applications/close-position", { job_role: selectedPosition });
+      setNotice({ type: "success", message: res.data.message });
+      loadApplications();
+    } catch (error) {
+      setNotice({
+        type: "error",
+        message: error.response?.data?.error || "Could not close position.",
+      });
+      setIsLoading(false);
+    }
+  };
 
   const loadApplications = useCallback(async (scoreFilter = "") => {
     try {
@@ -250,7 +299,7 @@ export default function Applications() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-slate-200/70 bg-white/75 p-6 shadow-sm backdrop-blur-md transition-colors duration-300 dark:border-slate-700 dark:bg-slate-900/70">
+      <div className="rounded-2xl border border-slate-200/70 bg-white/75 p-6 shadow-sm backdrop-blur-md transition-colors duration-300 dark:border-neutral-800/80 dark:bg-neutral-900/60">
         <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">
           Applications
         </h1>
@@ -259,7 +308,7 @@ export default function Applications() {
         </p>
       </div>
 
-      <div className="rounded-2xl border border-slate-200/70 bg-white/75 p-6 shadow-sm backdrop-blur-md transition-colors duration-300 dark:border-slate-700 dark:bg-slate-900/70">
+      <div className="rounded-2xl border border-slate-200/70 bg-white/75 p-6 shadow-sm backdrop-blur-md transition-colors duration-300 dark:border-neutral-800/80 dark:bg-neutral-900/60">
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <input
             type="number"
@@ -302,22 +351,71 @@ export default function Applications() {
           />
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-3">
-          <button
-            id="btn-apply-app-filters"
-            className="rounded-xl bg-blue-600 px-4 py-2 font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-300"
-            onClick={applyFilters}
-            disabled={isFiltering}
-          >
-            {isFiltering ? "Applying..." : "Apply Filters"}
-          </button>
-          <button
-            id="btn-reset-app-filters"
-            className="rounded-xl border border-slate-300 px-4 py-2 font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
-            onClick={clearFilters}
-          >
-            Reset Filters
-          </button>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-3">
+            <button
+              id="btn-apply-app-filters"
+              className="rounded-xl bg-blue-600 px-4 py-2 font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-blue-300"
+              onClick={applyFilters}
+              disabled={isFiltering}
+            >
+              {isFiltering ? "Applying..." : "Apply Filters"}
+            </button>
+            <button
+              id="btn-reset-app-filters"
+              className="rounded-xl border border-slate-300 px-4 py-2 font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+              onClick={clearFilters}
+            >
+              Reset Filters
+            </button>
+          </div>
+
+          <div className="flex flex-wrap gap-3 items-center">
+             <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">Position:</span>
+             <select
+                value={selectedPosition}
+                onChange={(e) => setSelectedPosition(e.target.value)}
+                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none transition focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+             >
+                {uniquePositions.map(pos => (
+                  <option key={pos} value={pos}>{pos}</option>
+                ))}
+             </select>
+             
+             {selectedPosition !== "ALL" && selectedStage !== "ALL" && (
+                <button
+                  onClick={handleBulkRemove}
+                  className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-500"
+                >
+                  Remove All {selectedStage}
+                </button>
+             )}
+             
+             {selectedPosition !== "ALL" && (
+                <button
+                  onClick={handleClosePosition}
+                  className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
+                >
+                  Close Position
+                </button>
+             )}
+          </div>
+        </div>
+
+        <div className="mt-6 flex flex-wrap gap-2">
+          {stages.map(stage => (
+            <button
+              key={stage}
+              onClick={() => setSelectedStage(stage)}
+              className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+                selectedStage === stage
+                  ? "bg-blue-600 text-white shadow-md"
+                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 dark:bg-neutral-800 dark:border-neutral-700 dark:text-slate-300 dark:hover:bg-neutral-700"
+              }`}
+            >
+              {stage}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -336,21 +434,21 @@ export default function Applications() {
       ) : null}
 
       {isLoading ? (
-        <div className="rounded-2xl border border-slate-200/70 bg-white/70 p-6 text-sm text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">
+        <div className="rounded-2xl border border-slate-200/70 bg-white/70 p-6 text-sm text-slate-500 shadow-sm dark:border-neutral-800/80 dark:bg-neutral-900/50 dark:text-slate-300">
           Loading applications...
         </div>
       ) : null}
 
-      {!isLoading && apps.length === 0 ? (
-        <div className="rounded-2xl border border-slate-200/70 bg-white/70 p-6 text-sm text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">
-          {activeView === "filtered"
+      {!isLoading && displayedApps.length === 0 ? (
+        <div className="rounded-2xl border border-slate-200/70 bg-white/70 p-6 text-sm text-slate-500 shadow-sm dark:border-neutral-800/80 dark:bg-neutral-900/50 dark:text-slate-300">
+          {activeView === "filtered" || selectedStage !== "ALL" || selectedPosition !== "ALL"
             ? "No applications matched your filters."
             : "No applications found yet."}
         </div>
       ) : null}
 
       {!isLoading &&
-        apps.map((a) => {
+        displayedApps.map((a) => {
           const isScheduling = scheduleForm.application_id === a.application_id;
           const isAddingFeedback = feedbackForm.application_id === a.application_id;
           const isHiring = hireForm.application_id === a.application_id;
@@ -358,7 +456,7 @@ export default function Applications() {
           return (
             <div
               key={a.application_id}
-              className="rounded-2xl border border-slate-200/70 bg-white/70 p-4 text-slate-700 shadow-sm transition-colors duration-300 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200"
+              className="rounded-2xl border border-slate-200/70 bg-white/70 p-4 text-slate-700 shadow-sm transition-colors duration-300 dark:border-neutral-800/80 dark:bg-neutral-900/50 dark:text-slate-200"
             >
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
@@ -533,10 +631,10 @@ export default function Applications() {
                 </form>
               ) : null}
 
-              {a.status === "INTERVIEWED" ? (
+              {a.status === "INTERVIEWED" && !a.user_has_feedback && !a.technical_score && !a.remarks ? (
                 <form
                   onSubmit={saveFeedback}
-                  className="mt-4 grid gap-3 rounded-2xl border border-slate-200/70 bg-white/60 p-4 dark:border-slate-700 dark:bg-slate-900/40 md:grid-cols-2"
+                  className="mt-4 grid gap-3 rounded-2xl border border-slate-200/70 bg-white/60 p-4 dark:border-neutral-800/80 dark:bg-neutral-900/40 md:grid-cols-2"
                 >
                   <input
                     type="number"
@@ -624,6 +722,12 @@ export default function Applications() {
                     {busyId === a.application_id ? "Saving..." : "Save Feedback"}
                   </button>
                 </form>
+              ) : a.status === "INTERVIEWED" && (a.user_has_feedback || a.technical_score || a.remarks) ? (
+                <div className="mt-4 rounded-2xl border border-emerald-200/80 bg-emerald-50/80 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/30">
+                  <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+                    ✓ Feedback has already been submitted for this candidate.
+                  </p>
+                </div>
               ) : null}
 
               {isHiring ? (

@@ -91,7 +91,7 @@ export default function Dashboard() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="rounded-2xl border border-slate-200/70 bg-white/75 p-6 shadow-sm backdrop-blur-md transition duration-300 hover:shadow-lg dark:border-slate-700 dark:bg-slate-900/70"
+          className="rounded-2xl border border-slate-200/70 bg-white/75 p-6 shadow-sm backdrop-blur-md transition duration-300 hover:shadow-lg dark:border-neutral-800/80 dark:bg-neutral-900/60"
         >
           <h2 className="mb-4 text-lg font-semibold text-slate-800 dark:text-slate-100">
             Pipeline
@@ -121,7 +121,7 @@ export default function Dashboard() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="flex flex-col items-center justify-center rounded-2xl border border-slate-200/70 bg-white/75 p-6 shadow-sm backdrop-blur-md transition duration-300 hover:shadow-lg dark:border-slate-700 dark:bg-slate-900/70"
+          className="flex flex-col items-center justify-center rounded-2xl border border-slate-200/70 bg-white/75 p-6 shadow-sm backdrop-blur-md transition duration-300 hover:shadow-lg dark:border-neutral-800/80 dark:bg-neutral-900/60"
         >
           <h2 className="mb-2 text-lg font-semibold text-slate-800 dark:text-slate-100">
             Conversion Rate
@@ -140,7 +140,7 @@ export default function Dashboard() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="col-span-full rounded-2xl border border-slate-200/70 bg-white/75 p-6 shadow-sm backdrop-blur-md transition hover:shadow-md dark:border-slate-700 dark:bg-slate-900/70"
+          className="col-span-full rounded-2xl border border-slate-200/70 bg-white/75 p-6 shadow-sm backdrop-blur-md transition hover:shadow-md dark:border-neutral-800/80 dark:bg-neutral-900/60"
         >
           <h2 className="mb-4 text-lg font-semibold text-slate-800 dark:text-slate-100">
             Employees by Department

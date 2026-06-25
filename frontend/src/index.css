@@ -10,7 +10,7 @@ html.dark {
 }
 
 body {
-  @apply min-h-screen bg-gradient-to-br from-slate-100 via-white to-slate-200 text-slate-900 transition-colors duration-300 dark:from-slate-950 dark:via-slate-900 dark:to-slate-800 dark:text-slate-100;
+  @apply min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 text-slate-900 transition-colors duration-300 dark:from-black dark:via-neutral-950 dark:to-neutral-900 dark:text-slate-100;
   font-family: "Inter", sans-serif;
 }
 
